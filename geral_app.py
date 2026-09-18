@@ -113,7 +113,7 @@ def carregar_dados_2022():
         else:
             df_geral["qt_votos_nom_validos"] = 0
 
-        # Lógica para ler diretamente as colunas PT% e PL% do Excel
+        # Lógica para ler as colunas PT% e PL% do Excel
         def extrair_porcentagem_2022(row):
             partido = str(row.get("Eleiç_2022", "")).strip().upper()
             col_alvo = f"{partido}%"  # Procura por 'PT%' ou 'PL%'
@@ -133,6 +133,14 @@ def carregar_dados_2022():
         df_geral["pct_votos"] = df_geral.apply(
             extrair_porcentagem_2022, axis=1
         )
+
+        # Trata a nova coluna de coligação (ds_composicao_coligacao)
+        if "ds_composicao_coligacao" in df_geral.columns:
+            df_geral["coligacao"] = df_geral["ds_composicao_coligacao"].fillna(
+                "Não informada / Partido Isolado"
+            )
+        else:
+            df_geral["coligacao"] = "Não informada / Partido Isolado"
 
         df_geral["ds_sit_tot_turno"] = "Mais Votado 2022"
         df_geral["municipio_id"] = (
@@ -375,9 +383,12 @@ with tab2:
                 else:
                     pct_str = ""
 
+                colig_2022 = cand.get("coligacao", "Não informada / Partido Isolado")
+
                 st.info(
                     f"**Mais Votado:** Partido {cand.get('sg_partido', '-')}\n\n"
-                    f"**Votos Válidos:** {votos_2022}{pct_str}"
+                    f"**Votos Válidos:** {votos_2022}{pct_str}\n\n"
+                    f"**Coligação:** {colig_2022}"
                 )
             else:
                 st.info("Sem dados de 2022.")
