@@ -75,7 +75,20 @@ uf_map = {
 }
 
 
-# Funções de Leitura com Cache
+@st.cache_data
+def carregar_malha_2025():
+    try:
+        df_malha = pd.read_excel("BR_malha_Municipios_2025.xlsx")
+        df_malha["nm_municipio"] = df_malha["NM_MUN"].apply(remover_acentos)
+        df_malha["sg_uf"] = df_malha["SIGLA_UF"]
+        df_malha["municipio_id"] = (
+            df_malha["nm_municipio"] + " - " + df_malha["sg_uf"]
+        )
+        return df_malha
+    except Exception:
+        return pd.DataFrame()
+
+
 @st.cache_data
 def carregar_dados_2022():
     try:
@@ -86,7 +99,41 @@ def carregar_dados_2022():
         df_geral["sg_uf"] = df_geral["UF_code"].map(uf_map)
         df_geral["nm_municipio"] = df_geral["nome"].apply(remover_acentos)
         df_geral["sg_partido"] = df_geral["Eleiç_2022"]
-        df_geral["qt_votos_nom_validos"] = df_geral["Vots_2022"].fillna(0)
+
+        # Busca coluna de votos
+        col_votos = None
+        for col in ["Vots_2022", "Votó_2022", "Voto_2022", "Votos_2022"]:
+            if col in df_geral.columns:
+                col_votos = col
+                break
+
+        if col_votos:
+            votos = pd.to_numeric(df_geral[col_votos], errors="coerce").fillna(0)
+            df_geral["qt_votos_nom_validos"] = votos.astype(int)
+        else:
+            df_geral["qt_votos_nom_validos"] = 0
+
+        # Lógica para ler diretamente as colunas PT% e PL% do Excel
+        def extrair_porcentagem_2022(row):
+            partido = str(row.get("Eleiç_2022", "")).strip().upper()
+            col_alvo = f"{partido}%"  # Procura por 'PT%' ou 'PL%'
+
+            if col_alvo in row.index and pd.notna(row[col_alvo]):
+                val_raw = row[col_alvo]
+                val_clean = (
+                    str(val_raw).replace("%", "").replace(",", ".").strip()
+                )
+                try:
+                    val = float(val_clean)
+                    return val * 100 if 0 < val <= 1.0 else val
+                except ValueError:
+                    pass
+            return None
+
+        df_geral["pct_votos"] = df_geral.apply(
+            extrair_porcentagem_2022, axis=1
+        )
+
         df_geral["ds_sit_tot_turno"] = "Mais Votado 2022"
         df_geral["municipio_id"] = (
             df_geral["nm_municipio"] + " - " + df_geral["sg_uf"]
@@ -97,7 +144,7 @@ def carregar_dados_2022():
 
 
 @st.cache_data
-def carregar_dados_csv(ano, turno_sel="Resultado Final (1º+2ºT)"):
+def carregar_dados_csv(ano):
     try:
         df1 = pd.read_csv(
             f"cand_mais_votado-municipio_prefeito_t1_{ano}.csv",
@@ -123,12 +170,25 @@ def carregar_dados_csv(ano, turno_sel="Resultado Final (1º+2ºT)"):
             df["nm_municipio"] = df["nm_municipio"].apply(remover_acentos)
 
         df["municipio_id"] = df["nm_municipio"] + " - " + df["sg_uf"]
+
+        if "qt_votos_nom_validos" in df.columns:
+            totais = (
+                df.groupby("municipio_id")["qt_votos_nom_validos"]
+                .sum()
+                .reset_index(name="total_votos_mun")
+            )
+            df = df.merge(totais, on="municipio_id", how="left")
+            df["pct_votos"] = (
+                df["qt_votos_nom_validos"] / df["total_votos_mun"]
+            ) * 100
+        else:
+            df["pct_votos"] = 0.0
+
         return df
     except Exception:
         return pd.DataFrame()
 
 
-# Função auxiliar para extrair a coligação do candidato de forma segura
 def obter_coligacao(cand):
     for col in [
         "ds_coligacao",
@@ -144,7 +204,6 @@ def obter_coligacao(cand):
 
 st.title("📱 Painel Eleitoral Brasil")
 
-# Abas Adaptadas
 tab1, tab2 = st.tabs(["📊 Visão Geral", "🔍 Consulta por Cidade"])
 
 # --- ABA 1: VISÃO GERAL ---
@@ -158,10 +217,8 @@ with tab1:
 
     if "2022" in ano_sel:
         df_cand = carregar_dados_2022()
-        turno_sel = "2º Turno (Presidencial)"
     else:
         df_cand = carregar_dados_csv(ano_sel)
-        turno_sel = "Resultado Final (1º+2ºT)"
 
     if df_cand.empty:
         st.warning(f"⚠️ Dados para o ano **{ano_sel}** não encontrados.")
@@ -189,7 +246,6 @@ with tab1:
                 )
             ]
 
-        # Cards 2x2 para telas pequenas
         m1, m2 = st.columns(2)
         m1.metric(
             "Total de Votos",
@@ -243,20 +299,26 @@ with tab1:
             + ": %{value:,.0f}<br>%{percentEntry:.1%}",
             textfont_size=14,
         )
-        # Altura otimizada para a tela do celular
         fig.update_layout(height=450, margin=dict(t=30, l=10, r=10, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
-# --- ABA 2: CONSULTA POR CIDADE (Mobile Friendly) ---
+# --- ABA 2: CONSULTA POR CIDADE ---
 with tab2:
     st.subheader("🔍 Histórico por Município")
 
+    df_malha = carregar_malha_2025()
     df_2020 = carregar_dados_csv("2020")
     df_2022 = carregar_dados_2022()
     df_2024 = carregar_dados_csv("2024")
 
-    if not df_2024.empty:
+    if not df_malha.empty:
+        cidades_lista = sorted(df_malha["municipio_id"].dropna().unique())
+    elif not df_2024.empty:
         cidades_lista = sorted(df_2024["municipio_id"].dropna().unique())
+    else:
+        cidades_lista = []
+
+    if cidades_lista:
         cidade_selecionada = st.selectbox(
             "Selecione o Município:", options=cidades_lista
         )
@@ -282,7 +344,7 @@ with tab2:
                 )
             ]
 
-            # Exibição Empilhada Verticalmente para Celular
+            # Eleições 2024
             st.markdown("#### 🏛️ Eleições 2024 (Prefeito)")
             if not e2024.empty:
                 cand = e2024.iloc[0]
@@ -290,27 +352,37 @@ with tab2:
                 votos_2024 = f"{cand.get('qt_votos_nom_validos', 0):,.0f}".replace(
                     ",", "."
                 )
+                pct_2024 = f"{cand.get('pct_votos', 0):.2f}%".replace(".", ",")
                 st.success(
                     f"**Prefeito Eleito:** {cand.get('nm_candidato', 'Não informado')}\n\n"
-                    f"**Partido:** {cand.get('sg_partido', '-')} | **Votos:** {votos_2024}\n\n"
+                    f"**Partido:** {cand.get('sg_partido', '-')} | **Votos:** {votos_2024} ({pct_2024})\n\n"
                     f"**Coligação:** {colig_2024}"
                 )
             else:
                 st.info("Sem dados de 2024.")
 
+            # Eleições 2022
             st.markdown("#### 🇧🇷 Eleições 2022 (Presidencial)")
             if not e2022.empty:
                 cand = e2022.iloc[0]
                 votos_2022 = f"{cand.get('qt_votos_nom_validos', 0):,.0f}".replace(
                     ",", "."
                 )
+                pct_val = cand.get("pct_votos")
+
+                if pct_val is not None and pd.notna(pct_val):
+                    pct_str = f" ({pct_val:.2f}%)".replace(".", ",")
+                else:
+                    pct_str = ""
+
                 st.info(
                     f"**Mais Votado:** Partido {cand.get('sg_partido', '-')}\n\n"
-                    f"**Votos Válidos:** {votos_2022}"
+                    f"**Votos Válidos:** {votos_2022}{pct_str}"
                 )
             else:
                 st.info("Sem dados de 2022.")
 
+            # Eleições 2020
             st.markdown("#### 🏛️ Eleições 2020 (Prefeito)")
             if not e2020.empty:
                 cand = e2020.iloc[0]
@@ -318,9 +390,10 @@ with tab2:
                 votos_2020 = f"{cand.get('qt_votos_nom_validos', 0):,.0f}".replace(
                     ",", "."
                 )
+                pct_2020 = f"{cand.get('pct_votos', 0):.2f}%".replace(".", ",")
                 st.success(
                     f"**Prefeito Eleito:** {cand.get('nm_candidato', 'Não informado')}\n\n"
-                    f"**Partido:** {cand.get('sg_partido', '-')} | **Votos:** {votos_2020}\n\n"
+                    f"**Partido:** {cand.get('sg_partido', '-')} | **Votos:** {votos_2020} ({pct_2020})\n\n"
                     f"**Coligação:** {colig_2020}"
                 )
             else:
