@@ -1,58 +1,52 @@
 import streamlit as st
 import pandas as pd
 
-# Configuração da página para ocupar a tela inteira e carregar leve
-st.set_page_config(page_title="Painel Eleitoral Brasil", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Painel Eleitoral 2026", layout="wide")
 
-st.title("🗳️ Painel Eleitoral Brasil")
+st.title("🗳️ Eleições 2026 - Consulta de Coligações")
 
-# Função com cache para não recarregar o arquivo a todo momento na memória
+# Função para carregar os dados de 2026 com suporte a acentuação e cache de memória
 @st.cache_data
-def carregar_dados(caminho_arquivo):
-    try:
-        # Lê apenas colunas essenciais ou trata separadores padrão de dados eleitorais
-        df = pd.read_csv(caminho_arquivo, sep=";", low_memory=False)
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar o arquivo {caminho_arquivo}: {e}")
-        return None
-
-# Menu de seleção para carregar apenas o dataset necessário (Lazy Loading)
-opcao_eleicao = st.sidebar.selectbox(
-    "Selecione o Dataset Eleitoral",
-    [
-        "Selecione...",
-        "Prefeito 2020 - 1º Turno",
-        "Prefeito 2024 - 1º Turno",
-        "Presidente 2020 - 1º Turno",
-        "Presidente 2020 - 2º Turno",
-        "Cand. 2024 com IBGE",
-        "Coligações 2026"
-    ]
-)
-
-# Mapeamento dos arquivos CSV exatamente como estão no seu repositório
-arquivos_map = {
-    "Prefeito 2020 - 1º Turno": "cand_mais_votado-municipio_prefeito_t1_2020.csv",
-    "Prefeito 2024 - 1º Turno": "cand_mais_votado-municipio_prefeito_t1_2024.csv",
-    "Presidente 2020 - 1º Turno": "cand_mais_votado-municipio_presidente_t1_2020.csv",
-    "Presidente 2020 - 2º Turno": "cand_mais_votado-municipio_presidente_t2_2020.csv",
-    "Cand. 2024 com IBGE": "cand_mais_votado-2024_com_ibge.csv",
-    "Coligações 2026": "consulta_coligacao_2026_BRASIL.csv"
-}
-
-if opcao_eleicao != "Selecione...":
-    arquivo = arquivos_map[opcao_eleicao]
-    st.info(f"Carregando dados de: {opcao_eleicao}...")
+def carregar_dados_2026():
+    caminho = "consulta_coligacao_2026_BRASIL.csv"
+    encodings = ["latin-1", "iso-8859-1", "cp1252", "utf-8"]
     
-    df = carregar_dados(arquivo)
+    for enc in encodings:
+        try:
+            df = pd.read_csv(caminho, sep=";", encoding=enc, low_memory=False)
+            return df
+        except (UnicodeDecodeError, Exception):
+            continue
+            
+    st.error("Não foi possível ler o arquivo das Coligações 2026.")
+    return None
+
+st.info("Carregando dados das Coligações de 2026...")
+
+df_2026 = carregar_dados_2026()
+
+if df_2026 is not None:
+    st.success("Dados de 2026 carregados com sucesso!")
     
-    if df is not None:
-        st.success("Dados carregados com sucesso!")
-        st.metric("Total de Registros", len(df))
+    # Métrica do total de registros
+    st.metric("Total de Coligações / Registros", f"{len(df_2026):,}".replace(",", "."))
+    
+    # Filtro opcional por Estado (UF) se a coluna existir no arquivo
+    colunas = [str(col).upper() for col in df_2026.columns]
+    col_uf = next((col for col in df_2026.columns if "UF" in col.upper() or "SG_UF" in col.upper()), None)
+    
+    if col_uf:
+        ufs = ["TODOS"] + sorted(list(df_2026[col_uf].dropna().unique()))
+        uf_selecionada = st.selectbox("Filtrar por Estado (UF):", ufs)
         
-        # Exibe uma amostra dos dados para o usuário sem sobrecarregar a tela
-        st.subheader("Pré-visualização dos Dados")
-        st.dataframe(df.head(100), use_container_width=True)
-else:
-    st.write("👈 Escolha uma das opções no menu lateral para visualizar os dados eleitorais.")
+        if uf_selecionada != "TODOS":
+            df_exibir = df_2026[df_2026[col_uf] == uf_selecionada]
+        else:
+            df_exibir = df_2026
+    else:
+        df_exibir = df_2026
+
+    # Exibição dos dados
+    st.subheader("Visualização dos Dados de 2026")
+    st.dataframe(df_exibir.head(500), use_container_width=True)
