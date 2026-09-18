@@ -1,9 +1,9 @@
 import unicodedata
-import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+import pandas as pd
 
-# Configuração Otimizada para Mobile
 st.set_page_config(
     page_title="Painel Eleitoral Brasil",
     layout="wide",
@@ -11,16 +11,13 @@ st.set_page_config(
 )
 
 
-# Função para remover acentos e 'Ç'
 def remover_acentos(texto):
     if not isinstance(texto, str):
         return texto
     nfkd = unicodedata.normalize("NFKD", texto)
-    texto_sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
-    return texto_sem_acento.upper()
+    return "".join([c for c in nfkd if not unicodedata.combining(c)]).upper()
 
 
-# Mapeamento Oficial de Cores dos Partidos
 cores_partidos = {
     "PT": "#CC0000",
     "PL": "#FFD700",
@@ -38,7 +35,6 @@ cores_partidos = {
     "PDT": "#1976D2",
     "MOBILIZA": "#FF9800",
     "CIDADANIA": "#00BCD4",
-    "PSC": "#009688",
     "NOVO": "#FF6F00",
     "PV": "#4CAF50",
     "REDE": "#8BC34A",
@@ -78,13 +74,11 @@ uf_map = {
 @st.cache_data
 def carregar_malha_2025():
     try:
-        df_malha = pd.read_excel("BR_malha_Municipios_2025.xlsx")
-        df_malha["nm_municipio"] = df_malha["NM_MUN"].apply(remover_acentos)
-        df_malha["sg_uf"] = df_malha["SIGLA_UF"]
-        df_malha["municipio_id"] = (
-            df_malha["nm_municipio"] + " - " + df_malha["sg_uf"]
-        )
-        return df_malha
+        df = pd.read_excel("BR_malha_Municipios_2025.xlsx")
+        df["nm_municipio"] = df["NM_MUN"].apply(remover_acentos)
+        df["sg_uf"] = df["SIGLA_UF"]
+        df["municipio_id"] = df["nm_municipio"] + " - " + df["sg_uf"]
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -92,61 +86,49 @@ def carregar_malha_2025():
 @st.cache_data
 def carregar_dados_2022():
     try:
-        df_geral = pd.read_excel("geral.xlsx")
-        df_geral["UF_code"] = (
-            df_geral["geocodigo"].astype(str).str[:2].astype(int)
+        df = pd.read_excel("geral.xlsx")
+        df["UF_code"] = df["geocodigo"].astype(str).str[:2].astype(int)
+        df["sg_uf"] = df["UF_code"].map(uf_map)
+        df["nm_municipio"] = df["nome"].apply(remover_acentos)
+        df["sg_partido"] = df["Eleiç_2022"]
+
+        col_votos = next(
+            (
+                c
+                for c in ["Vots_2022", "Votó_2022", "Voto_2022", "Votos_2022"]
+                if c in df.columns
+            ),
+            None,
         )
-        df_geral["sg_uf"] = df_geral["UF_code"].map(uf_map)
-        df_geral["nm_municipio"] = df_geral["nome"].apply(remover_acentos)
-        df_geral["sg_partido"] = df_geral["Eleiç_2022"]
+        df["qt_votos_nom_validos"] = (
+            pd.to_numeric(df[col_votos], errors="coerce").fillna(0).astype(int)
+            if col_votos
+            else 0
+        )
 
-        # Busca coluna de votos
-        col_votos = None
-        for col in ["Vots_2022", "Votó_2022", "Voto_2022", "Votos_2022"]:
-            if col in df_geral.columns:
-                col_votos = col
-                break
-
-        if col_votos:
-            votos = pd.to_numeric(df_geral[col_votos], errors="coerce").fillna(0)
-            df_geral["qt_votos_nom_validos"] = votos.astype(int)
-        else:
-            df_geral["qt_votos_nom_validos"] = 0
-
-        # Lógica para ler as colunas PT% e PL% do Excel
-        def extrair_porcentagem_2022(row):
+        def ext_pct(row):
             partido = str(row.get("Eleiç_2022", "")).strip().upper()
-            col_alvo = f"{partido}%"  # Procura por 'PT%' ou 'PL%'
-
-            if col_alvo in row.index and pd.notna(row[col_alvo]):
-                val_raw = row[col_alvo]
-                val_clean = (
-                    str(val_raw).replace("%", "").replace(",", ".").strip()
-                )
+            col = f"{partido}%"
+            if col in row.index and pd.notna(row[col]):
                 try:
-                    val = float(val_clean)
-                    return val * 100 if 0 < val <= 1.0 else val
+                    v = float(
+                        str(row[col])
+                        .replace("%", "")
+                        .replace(",", ".")
+                        .strip()
+                    )
+                    return v * 100 if 0 < v <= 1.0 else v
                 except ValueError:
                     pass
             return None
 
-        df_geral["pct_votos"] = df_geral.apply(
-            extrair_porcentagem_2022, axis=1
-        )
-
-        # Trata a nova coluna de coligação (ds_composicao_coligacao)
-        if "ds_composicao_coligacao" in df_geral.columns:
-            df_geral["coligacao"] = df_geral["ds_composicao_coligacao"].fillna(
-                "Não informada / Partido Isolado"
-            )
-        else:
-            df_geral["coligacao"] = "Não informada / Partido Isolado"
-
-        df_geral["ds_sit_tot_turno"] = "Mais Votado 2022"
-        df_geral["municipio_id"] = (
-            df_geral["nm_municipio"] + " - " + df_geral["sg_uf"]
-        )
-        return df_geral
+        df["pct_votos"] = df.apply(ext_pct, axis=1)
+        df["coligacao"] = df.get(
+            "ds_composicao_coligacao", "Não informada / Partido Isolado"
+        ).fillna("Não informada / Partido Isolado")
+        df["ds_sit_tot_turno"] = "Mais Votado 2022"
+        df["municipio_id"] = df["nm_municipio"] + " - " + df["sg_uf"]
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -167,32 +149,55 @@ def carregar_dados_csv(ano):
             )
             df1["nm_municipio"] = df1["nm_municipio"].apply(remover_acentos)
             df2["nm_municipio"] = df2["nm_municipio"].apply(remover_acentos)
-            cidades_t2 = df2["nm_municipio"] + " - " + df2["sg_uf"]
+            c_t2 = df2["nm_municipio"] + " - " + df2["sg_uf"]
             df1["mun_id"] = df1["nm_municipio"] + " - " + df1["sg_uf"]
-            df1_filtrado = df1[~df1["mun_id"].isin(cidades_t2)].drop(
+            df1_f = df1[~df1["mun_id"].isin(c_t2)].drop(
                 columns=["mun_id"], errors="ignore"
             )
-            df = pd.concat([df1_filtrado, df2], ignore_index=True)
+            df = pd.concat([df1_f, df2], ignore_index=True)
         except Exception:
             df = df1
             df["nm_municipio"] = df["nm_municipio"].apply(remover_acentos)
 
         df["municipio_id"] = df["nm_municipio"] + " - " + df["sg_uf"]
-
         if "qt_votos_nom_validos" in df.columns:
-            totais = (
+            tot = (
                 df.groupby("municipio_id")["qt_votos_nom_validos"]
                 .sum()
                 .reset_index(name="total_votos_mun")
             )
-            df = df.merge(totais, on="municipio_id", how="left")
+            df = df.merge(tot, on="municipio_id", how="left")
             df["pct_votos"] = (
                 df["qt_votos_nom_validos"] / df["total_votos_mun"]
             ) * 100
         else:
             df["pct_votos"] = 0.0
-
         return df
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data
+def carregar_vereadores_2024():
+    try:
+        df = pd.read_csv(
+            "cand_mais_votado-municipio_vereador_t1_2024.csv",
+            sep=";",
+            encoding="latin1",
+        )
+        df["nm_municipio"] = df["nm_municipio"].apply(remover_acentos)
+        df["municipio_id"] = df["nm_municipio"] + " - " + df["sg_uf"]
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data
+def carregar_vagas_2026():
+    try:
+        return pd.read_csv(
+            "consulta_vagas_2026_BRASIL.csv", sep=";", encoding="latin1"
+        )
     except Exception:
         return pd.DataFrame()
 
@@ -212,21 +217,23 @@ def obter_coligacao(cand):
 
 st.title("📱 Painel Eleitoral Brasil")
 
-tab1, tab2 = st.tabs(["📊 Visão Geral", "🔍 Consulta por Cidade"])
+tab1, tab2, tab3 = st.tabs(
+    ["📊 Visão Geral", "🔍 Consulta por Cidade", "📈 Projeções & Força 2026"]
+)
 
 # --- ABA 1: VISÃO GERAL ---
 with tab1:
     col_ano, col_uf = st.columns(2)
-
     with col_ano:
         ano_sel = st.selectbox(
             "Ano", options=["2024", "2022 (Presidencial)", "2020"]
         )
 
-    if "2022" in ano_sel:
-        df_cand = carregar_dados_2022()
-    else:
-        df_cand = carregar_dados_csv(ano_sel)
+    df_cand = (
+        carregar_dados_2022()
+        if "2022" in ano_sel
+        else carregar_dados_csv(ano_sel)
+    )
 
     if df_cand.empty:
         st.warning(f"⚠️ Dados para o ano **{ano_sel}** não encontrados.")
@@ -245,14 +252,15 @@ with tab1:
         if uf_sel != "Brasil (Todos)":
             df_filtered = df_filtered[df_filtered["sg_uf"] == uf_sel]
 
-        if "2022" in ano_sel:
-            df_eleitos = df_filtered.copy()
-        else:
-            df_eleitos = df_filtered[
+        df_eleitos = (
+            df_filtered.copy()
+            if "2022" in ano_sel
+            else df_filtered[
                 df_filtered["ds_sit_tot_turno"].isin(
                     ["Eleito", "Eleito por QP", "Eleito por média"]
                 )
             ]
+        )
 
         m1, m2 = st.columns(2)
         m1.metric(
@@ -318,13 +326,17 @@ with tab2:
     df_2020 = carregar_dados_csv("2020")
     df_2022 = carregar_dados_2022()
     df_2024 = carregar_dados_csv("2024")
+    df_ver_2024 = carregar_vereadores_2024()
 
-    if not df_malha.empty:
-        cidades_lista = sorted(df_malha["municipio_id"].dropna().unique())
-    elif not df_2024.empty:
-        cidades_lista = sorted(df_2024["municipio_id"].dropna().unique())
-    else:
-        cidades_lista = []
+    cidades_lista = (
+        sorted(df_malha["municipio_id"].dropna().unique())
+        if not df_malha.empty
+        else (
+            sorted(df_2024["municipio_id"].dropna().unique())
+            if not df_2024.empty
+            else []
+        )
+    )
 
     if cidades_lista:
         cidade_selecionada = st.selectbox(
@@ -369,6 +381,56 @@ with tab2:
             else:
                 st.info("Sem dados de 2024.")
 
+            # Vereadores 2024
+            st.markdown("#### 🗳️ Vereadores Eleitos (2024)")
+            if not df_ver_2024.empty:
+                v_cid = df_ver_2024[
+                    (df_ver_2024["municipio_id"] == cidade_selecionada)
+                    & (
+                        df_ver_2024["ds_sit_tot_turno"].isin(
+                            ["Eleito por QP", "Eleito por média", "Eleito"]
+                        )
+                    )
+                ]
+
+                if not v_cid.empty:
+                    v_resumo = (
+                        v_cid.groupby("sg_partido")
+                        .size()
+                        .reset_index(name="Cadeiras")
+                        .sort_values(by="Cadeiras", ascending=False)
+                    )
+                    cols = st.columns(len(v_resumo))
+                    for idx, row in v_resumo.reset_index(drop=True).iterrows():
+                        if idx < len(cols):
+                            cols[idx].metric(
+                                row["sg_partido"], f"{row['Cadeiras']} seg."
+                            )
+
+                    st.dataframe(
+                        v_cid[
+                            [
+                                "nm_candidato",
+                                "sg_partido",
+                                "qt_votos_nom_validos",
+                                "ds_sit_tot_turno",
+                            ]
+                        ]
+                        .rename(
+                            columns={
+                                "nm_candidato": "Nome",
+                                "sg_partido": "Partido",
+                                "qt_votos_nom_validos": "Votos",
+                                "ds_sit_tot_turno": "Situação",
+                            }
+                        )
+                        .sort_values(by="Votos", ascending=False),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("Sem registro de vereadores eleitos.")
+
             # Eleições 2022
             st.markdown("#### 🇧🇷 Eleições 2022 (Presidencial)")
             if not e2022.empty:
@@ -377,13 +439,14 @@ with tab2:
                     ",", "."
                 )
                 pct_val = cand.get("pct_votos")
-
-                if pct_val is not None and pd.notna(pct_val):
-                    pct_str = f" ({pct_val:.2f}%)".replace(".", ",")
-                else:
-                    pct_str = ""
-
-                colig_2022 = cand.get("coligacao", "Não informada / Partido Isolado")
+                pct_str = (
+                    f" ({pct_val:.2f}%)".replace(".", ",")
+                    if pct_val is not None and pd.notna(pct_val)
+                    else ""
+                )
+                colig_2022 = cand.get(
+                    "coligacao", "Não informada / Partido Isolado"
+                )
 
                 st.info(
                     f"**Mais Votado:** Partido {cand.get('sg_partido', '-')}\n\n"
@@ -409,3 +472,148 @@ with tab2:
                 )
             else:
                 st.info("Sem dados de 2020.")
+
+# --- ABA 3: PROJEÇÕES & FORÇA 2026 ---
+with tab3:
+    st.subheader("📈 Capilaridade e Força Política para 2026")
+    st.markdown(
+        "Esta aba cruza o desempenho dos partidos na base municipal (Prefeitos e Vereadores eleitos em 2024) "
+        "para medir a estrutura de apoio (cabos eleitorais) com a qual cada partido chega para as Eleições de 2026."
+    )
+
+    df_vagas = carregar_vagas_2026()
+    ufs_vagas = (
+        sorted(df_vagas["SG_UF"].dropna().unique())
+        if not df_vagas.empty
+        else []
+    )
+    uf_proj = st.selectbox(
+        "Selecione a UF para Análise Projetiva:",
+        options=["Brasil (Todos)"] + ufs_vagas,
+    )
+
+    # Vagas 2026
+    if not df_vagas.empty:
+        df_v_filtrado = (
+            df_vagas
+            if uf_proj == "Brasil (Todos)"
+            else df_vagas[df_vagas["SG_UF"] == uf_proj]
+        )
+        vagas_summary = (
+            df_v_filtrado.groupby("DS_CARGO")["QT_VAGA"]
+            .sum()
+            .reset_index()
+            .sort_values(by="QT_VAGA", ascending=False)
+        )
+
+        st.markdown(f"**Vagas em Disputa em 2026 ({uf_proj}):**")
+        v_cols = st.columns(min(len(vagas_summary), 6))
+        for idx, row in vagas_summary.reset_index(drop=True).iterrows():
+            if idx < len(v_cols):
+                v_cols[idx].metric(row["DS_CARGO"], int(row["QT_VAGA"]))
+
+    st.markdown("---")
+
+    # Comparativo de Prefeituras (2020 vs 2024)
+    st.markdown("### 🏛️ Comparativo de Prefeituras (2020 vs 2024)")
+    if not df_2020.empty and not df_2024.empty:
+        d20 = (
+            df_2020
+            if uf_proj == "Brasil (Todos)"
+            else df_2020[df_2020["sg_uf"] == uf_proj]
+        )
+        d24 = (
+            df_2024
+            if uf_proj == "Brasil (Todos)"
+            else df_2024[df_2024["sg_uf"] == uf_proj]
+        )
+
+        e20 = (
+            d20[
+                d20["ds_sit_tot_turno"].isin(
+                    ["Eleito", "Eleito por QP", "Eleito por média"]
+                )
+            ]
+            .groupby("sg_partido")
+            .size()
+            .reset_index(name="Prefeituras 2020")
+        )
+        e24 = (
+            d24[
+                d24["ds_sit_tot_turno"].isin(
+                    ["Eleito", "Eleito por QP", "Eleito por média"]
+                )
+            ]
+            .groupby("sg_partido")
+            .size()
+            .reset_index(name="Prefeituras 2024")
+        )
+
+        df_comp = pd.merge(e20, e24, on="sg_partido", how="outer").fillna(0)
+        df_comp["Saldo"] = df_comp["Prefeituras 2024"] - df_comp["Prefeituras 2020"]
+        df_comp = df_comp.sort_values(
+            by="Prefeituras 2024", ascending=False
+        ).head(15)
+
+        fig_comp = go.Figure()
+        fig_comp.add_trace(
+            go.Bar(
+                x=df_comp["sg_partido"],
+                y=df_comp["Prefeituras 2020"],
+                name="2020",
+                marker_color="#90A4AE",
+            )
+        )
+        fig_comp.add_trace(
+            go.Bar(
+                x=df_comp["sg_partido"],
+                y=df_comp["Prefeituras 2024"],
+                name="2024",
+                marker_color="#1E88E5",
+            )
+        )
+        fig_comp.update_layout(
+            barmode="group",
+            height=400,
+            margin=dict(t=30, l=10, r=10, b=10),
+            title="Prefeituras Conquistadas por Partido",
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+    # Força dos Vereadores
+    st.markdown("### 🗳️ Total de Vereadores Eleitos em 2024 por Partido")
+    if not df_ver_2024.empty:
+        dver = (
+            df_ver_2024
+            if uf_proj == "Brasil (Todos)"
+            else df_ver_2024[df_ver_2024["sg_uf"] == uf_proj]
+        )
+        v_eleitos = dver[
+            dver["ds_sit_tot_turno"].isin(
+                ["Eleito por QP", "Eleito por média", "Eleito"]
+            )
+        ]
+
+        if not v_eleitos.empty:
+            v_partido = (
+                v_eleitos.groupby("sg_partido")
+                .size()
+                .reset_index(name="Vereadores")
+                .sort_values(by="Vereadores", ascending=False)
+                .head(15)
+            )
+
+            fig_v = px.bar(
+                v_partido,
+                x="sg_partido",
+                y="Vereadores",
+                color="sg_partido",
+                color_discrete_map=cores_partidos,
+                text="Vereadores",
+                title="Bases de Vereadores (Principais Partidos)",
+            )
+            fig_v.update_traces(textposition="outside")
+            fig_v.update_layout(
+                height=400, showlegend=False, margin=dict(t=30, l=10, r=10, b=10)
+            )
+            st.plotly_chart(fig_v, use_container_width=True)
