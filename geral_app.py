@@ -79,11 +79,20 @@ if df_2026 is not None:
         if cand_sel != "TODOS":
             df_filtrado = df_filtrado[df_filtrado[col_busca_cand] == cand_sel]
 
-    # Botão para resetar o mapa de forma simples
+    # Botão para resetar o mapa
     if st.session_state["uf_mapa"] != "TODOS":
         if st.sidebar.button("🇧🇷 Ver Brasil Inteiro (Resetar Mapa)"):
             st.session_state["uf_mapa"] = "TODOS"
             st.rerun()
+
+    # 💡 MANUAL DO USUÁRIO DISCRETO (Acima de Indicadores Gerais)
+    with st.expander("❓ **Como usar este painel (Guia Rápido)**", expanded=False):
+        st.markdown("""
+        * **🗺️ Filtrar por Estado:** Toque diretamente num estado no mapa do Brasil para ver os dados daquela região.
+        * **🔍 Menu Lateral (Filtros):** No celular, toque no ícone de menu (`>`) no canto superior para filtrar por Cargo, Partido ou Nome do Candidato.
+        * **🇧🇷 Voltar ao Brasil Inteiro:** Para limpar o filtro do mapa, toque no botão **"Ver Brasil Inteiro"** no menu lateral.
+        * **📋 Tabela de Dados:** Role até o final da página para consultar a lista completa dos registros.
+        """)
 
     # Indicadores
     st.markdown("### 📊 Indicadores Gerais")
@@ -130,7 +139,6 @@ if df_2026 is not None:
                 selection_mode="points"
             )
 
-            # Atualiza o filtro apenas quando há um toque confirmado no mapa
             if event_data and "selection" in event_data and "points" in event_data["selection"]:
                 pontos = event_data["selection"]["points"]
                 if pontos:
