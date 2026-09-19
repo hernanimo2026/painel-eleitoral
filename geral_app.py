@@ -170,33 +170,40 @@ if df_2026 is not None:
     # Exibição da Tabela Final (Dataframe)
     st.subheader(f"📋 Tabela Completa de Dados - {tipo_base}")
 
+    # Fazemos uma cópia leve para formatar os textos
+    df_exibicao = df_filtrado.copy()
+
+    # Dicionário para simplificar os nomes longos de federações e coligações por siglas
+    substituicoes = {
+        "FEDERAÇÃO BRASIL DA ESPERANÇA - FE BRASIL (13-PT / 65-PC do B / 43-PV)": "FE BRASIL (PT/PCdoB/PV)",
+        "FEDERAÇÃO BRASIL DA ESPERANÇA - FE BRASIL": "FE BRASIL (PT/PCdoB/PV)",
+        "FEDERAÇÃO PSDB CIDADANIA (45-PSDB / 23-CIDADANIA)": "PSDB/CIDADANIA",
+        "FEDERAÇÃO PSDB CIDADANIA": "PSDB/CIDADANIA",
+        "FEDERAÇÃO RENOVAÇÃO SOLIDÁRIA (25-PRD / 77-SOLIDARIEDADE)": "RENOVAÇÃO (PRD/SOLIDARIEDADE)",
+        "FEDERAÇÃO RENOVAÇÃO SOLIDÁRIA": "RENOVAÇÃO (PRD/SOLIDARIEDADE)",
+        "FEDERAÇÃO UNIÃO PROGRESSISTA (44-UNIÃO / 11-PP)": "UNIÃO/PP",
+        "FEDERAÇÃO UNIÃO PROGRESSISTA": "UNIÃO/PP",
+        "FEDERAÇÃO PSOL REDE (50-PSOL / 18-REDE)": "PSOL/REDE",
+        "FEDERAÇÃO PSOL REDE": "PSOL/REDE",
+    }
+
+    # Aplica a substituição nas colunas de composição se elas existirem na tabela
+    for col in ["DS_COMPOSICAO_COLIGACAO", "DS_COMPOSICAO_FEDERACAO"]:
+        if col in df_exibicao.columns:
+            for nome_longo, sigla_curta in substituicoes.items():
+                df_exibicao[col] = df_exibicao[col].astype(str).str.replace(nome_longo, sigla_curta, regex=False)
+
     # Organização das colunas principais
-    cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_filtrado.columns]
+    cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_exibicao.columns]
     
     # Oculta colunas redundantes
     cols_para_esconder = ["CANDIDATO_EXIBICAO", "NM_FEDERACAO", "NM_COLIGACAO"]
-    cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c not in cols_para_esconder]
+    cols_outras = [c for c in df_exibicao.columns if c not in cols_destaque and c not in cols_para_esconder]
 
-    # Prepara a tabela garantindo alinhamento e quebra de texto
-    df_exibicao = df_filtrado[cols_destaque + cols_outras]
-
-    # Aplica formatação CSS para quebrar linhas e mostrar o texto completo desde o início
+    # Exibe a tabela otimizada
     st.dataframe(
-        df_exibicao.style.set_properties(**{
-            'white-space': 'normal',
-            'text-align': 'left'
-        }),
-        width="stretch",
-        column_config={
-            "DS_COMPOSICAO_COLIGACAO": st.column_config.TextColumn(
-                "Composição da Coligação",
-                width="large"
-            ),
-            "DS_COMPOSICAO_FEDERACAO": st.column_config.TextColumn(
-                "Composição da Federação",
-                width="large"
-            )
-        }
+        df_exibicao[cols_destaque + cols_outras],
+        use_container_width=True
     )
 
 else:
