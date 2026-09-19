@@ -170,11 +170,15 @@ if df_2026 is not None:
     # Exibição da Tabela Final (Dataframe)
     st.subheader(f"📋 Tabela Completa de Dados - {tipo_base}")
 
-    # Organização das colunas
+    # Organização das colunas principais
     cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_filtrado.columns]
-    cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c != "CANDIDATO_EXIBICAO"]
+    
+    # Lista das colunas que você NÃO quer que apareçam em nenhuma tabela:
+    cols_para_esconder = ["CANDIDATO_EXIBICAO", "NM_FEDERACAO", "NM_COLIGACAO"]
+    
+    cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c not in cols_para_esconder]
 
-    # Exibe a tabela configurando a coluna de Coligação mais larga para não cortar o texto
+    # Exibe a tabela formatada
     st.dataframe(
         df_filtrado[cols_destaque + cols_outras],
         use_container_width=True,
