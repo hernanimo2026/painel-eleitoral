@@ -172,10 +172,15 @@ if df_2026 is not None:
     st.markdown("---")
     st.subheader(f"📋 Tabela Completa de Dados - {tipo_base}")
 
-    cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_filtrado.columns]
-    cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c != "CANDIDATO_EXIBICAO"]
-    
-    st.dataframe(df_filtrado[cols_destaque + cols_outras], use_container_width=True)
+   # Copiamos a base para exibição e removemos as duas colunas
+    df_exibicao = df_filtrado.copy()
+    if tipo_base == "Candidatos 2026":
+        colunas_remover = ["NM_COLIGACAO", "NM_FEDERACAO"]
+        df_exibicao = df_exibicao.drop(columns=[c for c in colunas_remover if c in df_exibicao.columns])
 
+    cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_exibicao.columns]
+    cols_outras = [c for c in df_exibicao.columns if c not in cols_destaque and c != "CANDIDATO_EXIBICAO"]
+
+    st.dataframe(df_exibicao[cols_destaque + cols_outras], use_container_width=True)
 else:
     st.error("Aguardando carregamento da base de dados...")
