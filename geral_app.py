@@ -173,18 +173,27 @@ if df_2026 is not None:
     # Organização das colunas principais
     cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_filtrado.columns]
     
-    # Lista das colunas que você NÃO quer que apareçam em nenhuma tabela:
+    # Oculta colunas redundantes
     cols_para_esconder = ["CANDIDATO_EXIBICAO", "NM_FEDERACAO", "NM_COLIGACAO"]
-    
     cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c not in cols_para_esconder]
 
-    # Exibe a tabela formatada
+    # Prepara a tabela garantindo alinhamento e quebra de texto
+    df_exibicao = df_filtrado[cols_destaque + cols_outras]
+
+    # Aplica formatação CSS para quebrar linhas e mostrar o texto completo desde o início
     st.dataframe(
-        df_filtrado[cols_destaque + cols_outras],
-        use_container_width=True,
+        df_exibicao.style.set_properties(**{
+            'white-space': 'normal',
+            'text-align': 'left'
+        }),
+        width="stretch",
         column_config={
             "DS_COMPOSICAO_COLIGACAO": st.column_config.TextColumn(
                 "Composição da Coligação",
+                width="large"
+            ),
+            "DS_COMPOSICAO_FEDERACAO": st.column_config.TextColumn(
+                "Composição da Federação",
                 width="large"
             )
         }
