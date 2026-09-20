@@ -120,33 +120,33 @@ if col_uf:
         color="TOTAL",
         color_continuous_scale="Blues",
         labels={"TOTAL": "Registros", col_uf: "UF"},
+        projection="mercator"  # Garante proporção ideal sem caixa retangular solta
     )
     
-    # Ajusta os limites para focar 100% no Brasil sem margens extras
+    # Recalcula o enquadramento exato das fronteiras do Brasil
     fig_mapa.update_geos(
         fitbounds="locations",
         visible=False,
         showframe=False
     )
     
-    # Remove legendas e margens para o mapa ocupar todo o ecrã
+    # Ajusta o tamanho da área do gráfico para encaixar o Brasil de ponta a ponta
     fig_mapa.update_layout(
         margin=dict(t=0, l=0, r=0, b=0),
-        height=400,
+        height=320,  # Altura proporcional ao formato do Brasil em telas mobile
         dragmode=False,
-        coloraxis_showscale=False,  # Remove a barra de legenda para liberar espaço
+        coloraxis_showscale=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)"
     )
 
-    # Exibe o mapa limpo e sem barras de ferramentas
     event_data = st.plotly_chart(
         fig_mapa,
         use_container_width=True,
         on_select="rerun",
         selection_mode="points",
         config={
-            'displayModeBar': False,  # Oculta os botões do topo para o mapa subir
+            'displayModeBar': False,
             'scrollZoom': False
         }
     )
