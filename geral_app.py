@@ -121,11 +121,22 @@ if col_uf:
         color_continuous_scale="Blues",
         labels={"TOTAL": "Registros", col_uf: "UF"},
     )
+    
     fig_mapa.update_geos(fitbounds="locations", visible=False)
+    
+    # Otimização para o ecrã do telemóvel
     fig_mapa.update_layout(
-        margin=dict(t=10, l=0, r=0, b=0),
-        height=420,
-        clickmode="event+select"
+        margin=dict(t=0, l=0, r=0, b=0),
+        height=550,  # Aumenta a altura para preencher o ecrã
+        coloraxis_colorbar=dict(
+            title="Registros",
+            orientation="h",   # Legenda na horizontal
+            yanchor="bottom",
+            y=-0.15,           # Posiciona a legenda abaixo do mapa
+            xanchor="center",
+            x=0.5,
+            len=0.8            # Ajusta o tamanho da barra
+        )
     )
 
     event_data = st.plotly_chart(
