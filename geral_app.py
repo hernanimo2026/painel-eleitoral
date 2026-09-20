@@ -122,20 +122,28 @@ if col_uf:
         labels={"TOTAL": "Registros", col_uf: "UF"},
     )
     
-    fig_mapa.update_geos(fitbounds="locations", visible=False)
+    # Remove o retângulo e a moldura do mapa
+    fig_mapa.update_geos(
+        fitbounds="locations",
+        visible=False,          # Esconde linhas de costa, fronteiras globais e a moldura retangular
+        showframe=False,        # Remove explicitamente a caixa/moldura ao redor
+        bgcolor="rgba(0,0,0,0)" # Garante fundo transparente
+    )
     
-    # Otimização para o ecrã do telemóvel
     fig_mapa.update_layout(
         margin=dict(t=0, l=0, r=0, b=0),
-        height=550,  # Aumenta a altura para preencher o ecrã
+        height=450,
+        dragmode=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         coloraxis_colorbar=dict(
             title="Registros",
-            orientation="h",   # Legenda na horizontal
+            orientation="h",
             yanchor="bottom",
-            y=-0.15,           # Posiciona a legenda abaixo do mapa
+            y=-0.1,
             xanchor="center",
             x=0.5,
-            len=0.8            # Ajusta o tamanho da barra
+            len=0.85
         )
     )
 
@@ -143,7 +151,13 @@ if col_uf:
         fig_mapa,
         use_container_width=True,
         on_select="rerun",
-        selection_mode="points"
+        selection_mode="points",
+        config={
+            'displayModeBar': True,
+            'scrollZoom': False,
+            'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+            'displaylogo': False
+        }
     )
 
     if event_data and "selection" in event_data and "points" in event_data["selection"]:
