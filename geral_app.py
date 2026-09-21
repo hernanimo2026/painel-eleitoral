@@ -43,9 +43,9 @@ with st.expander("🔍 Filtros de Pesquisa (Clique para recolher)", expanded=Tru
     cargos_selecionados = st.multiselect(
         "1. Cargo:",
         options=lista_cargos,
-        default=["PRESIDENTE", "SENADOR"],
+        default=["PRESIDENTE", "GOVERNADOR", "SENADOR"],
     )
-    ufs_selecionadas = st.multiselect("2. Estado (UF):", options=lista_ufs)
+    ufs_selecionadas = st.multiselect("3. Estado (UF):", options=lista_ufs)
 
   # Pré-filtragem da base para atualizar as opções de partidos e coligações com base no Estado/Cargo escolhidos
   df_opcoes = df_limpo.copy()
