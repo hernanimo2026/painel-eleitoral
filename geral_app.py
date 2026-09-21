@@ -110,7 +110,7 @@ candidatos_filtrados = df_limpo.loc[condicao]
 
 # --- RESULTADOS ---
 st.subheader("Candidatos Encontrados")
-st.dataframe(candidatos_filtrados.head(2000))
+st.dataframe(candidatos_filtrados.head(100))
 
 total_por_partido = (
     candidatos_filtrados.groupby(["SG_UF", "SG_PARTIDO", "DS_CARGO"])[
