@@ -43,7 +43,7 @@ with st.expander("🔍 Filtros de Pesquisa (Clique para recolher)", expanded=Tru
     cargos_selecionados = st.multiselect(
         "1. Cargo:",
         options=lista_cargos,
-        default=["PRESIDENTE", "DEPUTADO FEDERAL"],
+        default=["PRESIDENTE", "SENADOR"],
     )
     ufs_selecionadas = st.multiselect("2. Estado (UF):", options=lista_ufs)
 
