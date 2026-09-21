@@ -43,7 +43,7 @@ with st.expander("🔍 Filtros de Pesquisa (Clique para recolher)", expanded=Tru
     cargos_selecionados = st.multiselect(
         "1. Cargo:",
         options=lista_cargos,
-        default=["SENADOR", "DEPUTADO FEDERAL"],
+        default=["PRESIDENTE", "GOVERNO", "SENADOR", "DEPUTADO FEDERAL"],
     )
     ufs_selecionadas = st.multiselect("2. Estado (UF):", options=lista_ufs)
 
@@ -110,7 +110,7 @@ candidatos_filtrados = df_limpo.loc[condicao]
 
 # --- RESULTADOS ---
 st.subheader("Candidatos Encontrados")
-st.dataframe(candidatos_filtrados.head(100))
+st.dataframe(candidatos_filtrados.head(50))
 
 total_por_partido = (
     candidatos_filtrados.groupby(["SG_UF", "SG_PARTIDO", "DS_CARGO"])[
