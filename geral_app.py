@@ -36,7 +36,7 @@ for col in colunas_nome_possiveis:
         col_nome = col
         break
 
-# Lista de UFs validando apenas siglas reais com 2 letras maiúsculas (elimina o "SOU")
+# Lista de UFs validando apenas siglas reais (elimina o "SOU")
 ufs_unicas = sorted([str(u) for u in df[col_uf].dropna().unique() if len(str(u)) == 2 and str(u).isupper()]) if col_uf in df.columns else []
 partidos_unicos = sorted([str(p) for p in df[col_partido].dropna().unique()]) if col_partido in df.columns else []
 colig_unicas = sorted([str(c) for c in df[col_coligacao].dropna().unique()]) if col_coligacao in df.columns else []
@@ -101,7 +101,7 @@ with aba1:
 
     st.divider()
 
-    # --- TABELAS DE RESUMO (SEM OS GRÁFICOS) ---
+    # --- TABELAS ESTATÍSTICAS (GRÁFICOS REMOVIDOS DEFINITIVAMENTE) ---
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
@@ -117,19 +117,6 @@ with aba1:
             df_partido_count = df_filtrado[col_partido].value_counts().reset_index()
             df_partido_count.columns = ["Partido", "Quantidade"]
             st.dataframe(df_partido_count, use_container_width=True)
-    st.divider()
-
-    # --- 2. DEPOIS (ATRÁS / POR BAIXO): GRÁFICOS DE BARRAS ---
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
-        st.write("### Gráfico: Candidatos por Cargo")
-        if col_cargo in df_filtrado.columns and not df_filtrado.empty:
-            st.bar_chart(df_filtrado[col_cargo].value_counts())
-
-    with col_g2:
-        st.write("### Gráfico: Candidatos por Partido")
-        if col_partido in df_filtrado.columns and not df_filtrado.empty:
-            st.bar_chart(df_filtrado[col_partido].value_counts())
 
 with aba2:
     st.subheader(f"Lista de Candidatos ({len(df_filtrado):,} registos)")
