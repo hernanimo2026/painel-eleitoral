@@ -1,10 +1,18 @@
 import streamlit as st
 import pandas as pd
+import unicodedata
 
 st.set_page_config(page_title="Dashboard Eleições", layout="wide")
 
 st.title("🗳️ Painel de Acompanhamento - Eleições")
 st.write("Filtros combinados: O Estado funciona em conjunto com o Partido ou com a Coligação.")
+
+# Função para remover acentos e converter para minúsculas (facilita a busca)
+def normalizar_texto(texto):
+    if pd.isna(texto):
+        return ""
+    texto_sem_acento = unicodedata.normalize('NFKD', str(texto)).encode('ASCII', 'ignore').decode('utf-8')
+    return texto_sem_acento.lower()
 
 # 1. Carregar os dados CSV
 @st.cache_data
@@ -36,7 +44,7 @@ for col in colunas_nome_possiveis:
         col_nome = col
         break
 
-# Lista de UFs validando apenas siglas reais (elimina o "SOU")
+# Lista de UFs validando apenas siglas reais (elimina ruídos como "SOU")
 ufs_unicas = sorted([str(u) for u in df[col_uf].dropna().unique() if len(str(u)) == 2 and str(u).isupper()]) if col_uf in df.columns else []
 partidos_unicos = sorted([str(p) for p in df[col_partido].dropna().unique()]) if col_partido in df.columns else []
 colig_unicas = sorted([str(c) for c in df[col_coligacao].dropna().unique()]) if col_coligacao in df.columns else []
@@ -101,7 +109,7 @@ with aba1:
 
     st.divider()
 
-    # --- TABELAS ESTATÍSTICAS (GRÁFICOS REMOVIDOS DEFINITIVAMENTE) ---
+    # --- TABELAS ESTATÍSTICAS (SEM GRÁFICOS E COM CABEÇALHOS EM PORTUGUÊS) ---
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
@@ -126,8 +134,11 @@ with aba2:
     df_exibicao = df_filtrado.copy()
     col_nome_exibir = "NM_URNA_CANDIDATO" if "NM_URNA_CANDIDATO" in df_exibicao.columns else col_nome
     
+    # BUSCA INSENSÍVEL A ACENTOS E MAIÚSCULAS/MINÚSCULAS
     if termo_busca and col_nome_exibir in df_exibicao.columns:
-        df_exibicao = df_exibicao[df_exibicao[col_nome_exibir].astype(str).str.contains(termo_busca, case=False, na=False)]
+        termo_normalizado = normalizar_texto(termo_busca)
+        mascara = df_exibicao[col_nome_exibir].apply(normalizar_texto).str.contains(termo_normalizado, na=False)
+        df_exibicao = df_exibicao[mascara]
     
     colunas_finais = [c for c in [col_nome_exibir, col_cargo, col_partido, col_coligacao, col_uf] if c and c in df_exibicao.columns]
     
