@@ -101,23 +101,22 @@ with aba1:
 
     st.divider()
 
-    # --- 1. PRIMEIRO (NA FRENTE / NO TOPO): TABELAS DE RESUMO ---
+    # --- TABELAS DE RESUMO (SEM OS GRÁFICOS) ---
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
         st.write("### Candidatos por Cargo")
         if col_cargo in df_filtrado.columns and not df_filtrado.empty:
             df_cargo_count = df_filtrado[col_cargo].value_counts().reset_index()
-            df_cargo_count.columns = [col_cargo, "count"]
+            df_cargo_count.columns = ["Cargo Pretendido", "Quantidade"]
             st.dataframe(df_cargo_count, use_container_width=True)
 
     with col_t2:
         st.write("### Candidatos por Partido")
         if col_partido in df_filtrado.columns and not df_filtrado.empty:
             df_partido_count = df_filtrado[col_partido].value_counts().reset_index()
-            df_partido_count.columns = [col_partido, "count"]
+            df_partido_count.columns = ["Partido", "Quantidade"]
             st.dataframe(df_partido_count, use_container_width=True)
-
     st.divider()
 
     # --- 2. DEPOIS (ATRÁS / POR BAIXO): GRÁFICOS DE BARRAS ---
