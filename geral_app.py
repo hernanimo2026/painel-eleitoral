@@ -1,156 +1,156 @@
 import streamlit as st
 import pandas as pd
-import unicodedata
+import plotly.express as px
 
-st.set_page_config(page_title="Dashboard Eleições", layout="wide")
+# Configuração inicial da página
+st.set_page_config(page_title="Painel Eleitoral 2026", layout="wide")
 
-st.title("🗳️ Painel de Acompanhamento - Eleições")
-st.write("Filtros combinados: O Estado funciona em conjunto com o Partido ou com a Coligação.")
+st.title("🗳️ Eleições 2026 - Navegação Direta pelo Mapa")
 
-# Função para remover acentos e converter para minúsculas (facilita a busca)
-def normalizar_texto(texto):
-    if pd.isna(texto):
-        return ""
-    texto_sem_acento = unicodedata.normalize('NFKD', str(texto)).encode('ASCII', 'ignore').decode('utf-8')
-    return texto_sem_acento.lower()
-
-# 1. Carregar os dados CSV
+# Função de Leitura do Ficheiro CSV com Cache de Memória
 @st.cache_data
-def carregar_dados():
-    caminho_csv = "consulta_cand_2026_BRASIL.csv"
-    try:
-        df = pd.read_csv(caminho_csv, sep=";", encoding="latin-1")
-    except FileNotFoundError:
-        caminho_csv = "cand_mais_votado-2024_com_ibge.csv"
-        df = pd.read_csv(caminho_csv, sep=";", encoding="utf-8")
+def carregar_dados(caminho):
+    encodings = ["latin-1", "iso-8859-1", "cp1252", "utf-8"]
+    for enc in encodings:
+        try:
+            df = pd.read_csv(caminho, sep=";", encoding=enc, low_memory=False)
+            return df
+        except (UnicodeDecodeError, Exception):
+            continue
+    return None
+
+# Painel Lateral (Sidebar) - Seleção da Base de Dados
+st.sidebar.header("📁 Base de Dados 2026")
+tipo_base = st.sidebar.radio(
+    "Escolha o foco de análise:",
+    ["Candidatos 2026", "Coligações e Partidos 2026"]
+)
+
+# Seleção automática do ficheiro CSV
+arquivo = "consulta_cand_2026_BRASIL.csv" if tipo_base == "Candidatos 2026" else "consulta_coligacao_2026_BRASIL.csv"
+df_2026 = carregar_dados(arquivo)
+
+if df_2026 is not None:
+    cols = df_2026.columns.tolist()
     
-    # Limpa espaços em branco dos nomes das colunas
-    df.columns = df.columns.str.strip()
-    return df
-
-df = carregar_dados()
-
-# Mapeamento de colunas do TSE
-col_partido = "SG_PARTIDO" if "SG_PARTIDO" in df.columns else "Partido"
-col_coligacao = "DS_COMPOSICAO_COLIGACAO" if "DS_COMPOSICAO_COLIGACAO" in df.columns else "DS_COMPOSICAO_FEDERACAO"
-col_cargo = "DS_CARGO" if "DS_CARGO" in df.columns else "Cargo Pretendido"
-col_uf = "SG_UF" if "SG_UF" in df.columns else "UF"
-
-# Coluna do Nome
-colunas_nome_possiveis = ["NM_URNA_CANDIDATO", "NM_CANDIDATO", "NM_SOCIAL_CANDIDATO"]
-col_nome = None
-for col in colunas_nome_possiveis:
-    if col in df.columns:
-        col_nome = col
-        break
-
-# Lista de UFs validando apenas siglas reais (elimina ruídos como "SOU")
-ufs_unicas = sorted([str(u) for u in df[col_uf].dropna().unique() if len(str(u)) == 2 and str(u).isupper()]) if col_uf in df.columns else []
-partidos_unicos = sorted([str(p) for p in df[col_partido].dropna().unique()]) if col_partido in df.columns else []
-colig_unicas = sorted([str(c) for c in df[col_coligacao].dropna().unique()]) if col_coligacao in df.columns else []
-
-# 2. SESSION STATE
-if "filtro_partido" not in st.session_state:
-    st.session_state["filtro_partido"] = "Todos"
-if "filtro_coligacao" not in st.session_state:
-    st.session_state["filtro_coligacao"] = "Todos"
-if "filtro_uf" not in st.session_state:
-    st.session_state["filtro_uf"] = "BR" if "BR" in ufs_unicas else "Todos"
-
-def ao_mudar_partido():
-    if st.session_state["filtro_partido"] != "Todos":
-        st.session_state["filtro_coligacao"] = "Todos"
-
-def ao_mudar_coligacao():
-    if st.session_state["filtro_coligacao"] != "Todos":
-        st.session_state["filtro_partido"] = "Todos"
-
-# 3. FILTROS
-st.subheader("🔍 Filtros Dinâmicos")
-col_f1, col_f2, col_f3 = st.columns(3)
-
-with col_f1:
-    st.selectbox("1. Estado (UF):", options=["Todos"] + ufs_unicas, key="filtro_uf")
-
-with col_f2:
-    st.selectbox("2. Partido (Exclusivo com Coligação):", options=["Todos"] + partidos_unicos, key="filtro_partido", on_change=ao_mudar_partido)
-
-with col_f3:
-    st.selectbox("3. Coligação (Exclusiva com Partido):", options=["Todos"] + colig_unicas, key="filtro_coligacao", on_change=ao_mudar_coligacao)
-
-# 4. APLICAÇÃO DOS FILTROS
-df_filtrado = df.copy()
-
-uf_ativa = st.session_state["filtro_uf"]
-if uf_ativa != "Todos":
-    df_filtrado = df_filtrado[df_filtrado[col_uf] == uf_ativa]
-
-partido_ativo = st.session_state["filtro_partido"]
-coligacao_ativa = st.session_state["filtro_coligacao"]
-
-if partido_ativo != "Todos":
-    df_filtrado = df_filtrado[df_filtrado[col_partido] == partido_ativo]
-elif coligacao_ativa != "Todos":
-    df_filtrado = df_filtrado[df_filtrado[col_coligacao] == coligacao_ativa]
-
-st.divider()
-
-# 5. ABAS
-aba1, aba2 = st.tabs(["📊 Visão Geral", "📋 Lista de Candidatos"])
-
-with aba1:
-    st.subheader("Indicadores da Seleção")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Candidatos Exibidos", f"{len(df_filtrado):,}")
-    c2.metric("Estado Filtrado", uf_ativa)
+    # Identificação automática dos nomes das colunas
+    col_uf = next((c for c in cols if "SG_UF" in c.upper() or "UF" in c.upper()), None)
+    col_cargo = next((c for c in cols if "DS_CARGO" in c.upper() or "CARGO" in c.upper()), None)
+    col_partido = next((c for c in cols if "SG_PARTIDO" in c.upper() or "PARTIDO" in c.upper()), None)
     
-    grupo_ativo = partido_ativo if partido_ativo != "Todos" else coligacao_ativa
-    c3.metric("Grupo Político Ativo", grupo_ativo[:20] + "..." if len(grupo_ativo) > 20 else grupo_ativo)
+    col_nome_urna = next((c for c in cols if "NM_URNA_CANDIDATO" in c.upper() or "NM_URNA" in c.upper()), None)
+    col_nome_cand = next((c for c in cols if "NM_CANDIDATO" in c.upper()), None)
+    col_num_cand = next((c for c in cols if "NR_CANDIDATO" in c.upper()), None)
 
-    st.divider()
+    col_cand_principal = col_nome_urna if col_nome_urna else col_nome_cand
 
-    # --- TABELAS ESTATÍSTICAS (SEM GRÁFICOS E COM CABEÇALHOS EM PORTUGUÊS) ---
-    col_t1, col_t2 = st.columns(2)
-    
-    with col_t1:
-        st.write("### Candidatos por Cargo")
-        if col_cargo in df_filtrado.columns and not df_filtrado.empty:
-            df_cargo_count = df_filtrado[col_cargo].value_counts().reset_index()
-            df_cargo_count.columns = ["Cargo Pretendido", "Quantidade"]
-            st.dataframe(df_cargo_count, use_container_width=True)
+    # Estado da Sessão (Session State) para armazenar o toque no mapa
+    if "uf_mapa" not in st.session_state:
+        st.session_state["uf_mapa"] = "TODOS"
 
-    with col_t2:
-        st.write("### Candidatos por Partido")
-        if col_partido in df_filtrado.columns and not df_filtrado.empty:
-            df_partido_count = df_filtrado[col_partido].value_counts().reset_index()
-            df_partido_count.columns = ["Partido", "Quantidade"]
-            st.dataframe(df_partido_count, use_container_width=True)
+    st.sidebar.markdown("---")
+    st.sidebar.header("🔍 Filtros de Apoio")
 
-with aba2:
-    st.subheader(f"Lista de Candidatos ({len(df_filtrado):,} registos)")
+    df_filtrado = df_2026.copy()
+
+    # Aplica o filtro de estado (UF) selecionado pelo mapa
+    if col_uf and st.session_state["uf_mapa"] != "TODOS":
+        df_filtrado = df_filtrado[df_filtrado[col_uf] == st.session_state["uf_mapa"]]
+
+    # Menu 1: Filtro por Cargo
+    if col_cargo:
+        lista_cargos = ["TODOS"] + sorted([str(x) for x in df_filtrado[col_cargo].dropna().unique()])
+        cargo_sel = st.sidebar.selectbox("Cargo Disputado:", lista_cargos)
+        if cargo_sel != "TODOS":
+            df_filtrado = df_filtrado[df_filtrado[col_cargo] == cargo_sel]
+
+    # Menu 2: Filtro por Partido
+    if col_partido:
+        lista_partidos = ["TODOS"] + sorted([str(x) for x in df_filtrado[col_partido].dropna().unique()])
+        partido_sel = st.sidebar.selectbox("Partido / Coligação:", lista_partidos)
+        if partido_sel != "TODOS":
+            df_filtrado = df_filtrado[df_filtrado[col_partido] == partido_sel]
+
+    # Menu 3: Filtro por Nome do Candidato
+    if col_cand_principal:
+        if col_num_cand:
+            df_filtrado["CANDIDATO_EXIBICAO"] = df_filtrado[col_cand_principal].astype(str) + " (" + df_filtrado[col_num_cand].astype(str) + ")"
+            col_busca_cand = "CANDIDATO_EXIBICAO"
+        else:
+            col_busca_cand = col_cand_principal
+
+        lista_candidatos = ["TODOS"] + sorted([str(x) for x in df_filtrado[col_busca_cand].dropna().unique()])
+        cand_sel = st.sidebar.selectbox("Selecione o Candidato pelo Nome:", lista_candidatos)
+        if cand_sel != "TODOS":
+            df_filtrado = df_filtrado[df_filtrado[col_busca_cand] == cand_sel]
+
+    # Botão para limpar a seleção do mapa
+    if st.session_state["uf_mapa"] != "TODOS":
+        if st.sidebar.button("🇧🇷 Ver Brasil Inteiro (Resetar Mapa)"):
+            st.session_state["uf_mapa"] = "TODOS"
+            st.rerun()
+
+    # --- MAPA AMBIENTADO (SEM BARRA LATERAL DE ESCALA) ---
+    st.subheader("🗺️ Toque em um Estado para Selecionar")
+    if col_uf:
+        df_mapa = df_2026.groupby(col_uf).size().reset_index(name="TOTAL")
+        geojson_url = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson"
+        
+        fig_mapa = px.choropleth(
+            df_mapa,
+            geojson=geojson_url,
+            locations=col_uf,
+            featureidkey="properties.sigla",
+            color="TOTAL",
+            color_continuous_scale="Blues",
+            labels={"TOTAL": "Registros", col_uf: "UF"},
+        )
+        fig_mapa.update_geos(fitbounds="locations", visible=False)
+        fig_mapa.update_coloraxes(showscale=False)  # Remove a barra lateral de cores
+        fig_mapa.update_layout(
+            margin=dict(t=10, l=0, r=0, b=0),
+            height=650,
+            clickmode="event+select"
+        )
+        
+        event_data = st.plotly_chart(
+            fig_mapa,
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="points"
+        )
+
+        if event_data and "selection" in event_data and "points" in event_data["selection"]:
+            pontos = event_data["selection"]["points"]
+            if pontos:
+                uf_clicada = pontos[0].get("location")
+                if uf_clicada and uf_clicada != st.session_state["uf_mapa"]:
+                    st.session_state["uf_mapa"] = uf_clicada
+                    st.rerun()
+
+    st.markdown("---")
+
+    # --- SEÇÃO DE INDICADORES (ABAIXO DO MAPA) ---
+    st.markdown("### 📊 Indicadores Gerais")
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric("Total de Registros", f"{len(df_filtrado):,}".replace(",", "."))
+    with m2:
+        if col_partido:
+            st.metric("Partidos na Análise", df_filtrado[col_partido].nunique())
+    with m3:
+        st.metric("Estado Selecionado no Mapa", st.session_state["uf_mapa"])
+
+    st.markdown("---")
     
-    termo_busca = st.text_input("🔍 Buscar candidato pelo nome:", "")
-    
-    df_exibicao = df_filtrado.copy()
-    col_nome_exibir = "NM_URNA_CANDIDATO" if "NM_URNA_CANDIDATO" in df_exibicao.columns else col_nome
-    
-    # BUSCA INSENSÍVEL A ACENTOS E MAIÚSCULAS/MINÚSCULAS
-    if termo_busca and col_nome_exibir in df_exibicao.columns:
-        termo_normalizado = normalizar_texto(termo_busca)
-        mascara = df_exibicao[col_nome_exibir].apply(normalizar_texto).str.contains(termo_normalizado, na=False)
-        df_exibicao = df_exibicao[mascara]
-    
-    colunas_finais = [c for c in [col_nome_exibir, col_cargo, col_partido, col_coligacao, col_uf] if c and c in df_exibicao.columns]
-    
-    st.dataframe(
-        df_exibicao[colunas_finais],
-        use_container_width=True,
-        column_config={
-            "NM_URNA_CANDIDATO": "Nome na Urna",
-            "NM_CANDIDATO": "Nome na Urna",
-            col_cargo: "Cargo Pretendido",
-            col_partido: "Partido",
-            col_coligacao: "Coligação / Federação",
-            col_uf: "Estado (UF)"
-        }
-    )
+    # Exibição da Tabela Final (Dataframe)
+    st.subheader(f"📋 Tabela Completa de Dados - {tipo_base}")
+
+    # Organização das colunas
+    cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_filtrado.columns]
+    cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c != "CANDIDATO_EXIBICAO"]
+
+    st.dataframe(df_filtrado[cols_destaque + cols_outras], use_container_width=True)
+
+else:
+    st.error("Aguardando carregamento da base de dados...")
