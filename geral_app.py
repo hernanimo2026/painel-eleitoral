@@ -1,178 +1,340 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
-# Configuração inicial da página (Layout Amplo)
-st.set_page_config(page_title="Painel Eleitoral 2026", layout="wide")
+# ---------------------------------------------------------
+# Configuração da Página
+# ---------------------------------------------------------
+st.set_page_config(page_title="Urna Eletrônica 2026", layout="wide", initial_sidebar_state="collapsed")
 
-# Oculta a barra lateral e zera o padding topo/baixo
 st.markdown("""
     <style>
-        [data-testid="stSidebar"] {
-            display: none;
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 2rem;
+        max-width: 900px;
+    }
+    
+    .urna-tela {
+        background-color: #dbe3db;
+        border: 4px solid #1a1a1a;
+        border-radius: 8px;
+        padding: 18px;
+        min-height: 380px;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.15);
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .caixa-num {
+        display: inline-block;
+        width: 34px;
+        height: 42px;
+        border: 2px solid #000;
+        font-size: 26px;
+        font-weight: bold;
+        text-align: center;
+        line-height: 38px;
+        margin-right: 3px;
+        background-color: #fff;
+        color: #000;
+    }
+
+    .teclado-painel {
+        background-color: #2b2b2b;
+        padding: 15px;
+        border-radius: 10px;
+        border: 3px solid #111;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        margin-top: 10px;
+    }
+
+    div.stButton > button {
+        width: 100%;
+        height: 52px;
+        font-weight: bold;
+        font-size: 18px;
+        border-radius: 6px;
+        box-shadow: 0 4px 0px #000;
+        transition: all 0.05s ease;
+    }
+
+    div.stButton > button:active {
+        transform: translateY(3px);
+        box-shadow: 0 1px 0px #000;
+    }
+
+    .btn-num button {
+        background-color: #222222 !important;
+        color: #ffffff !important;
+        border: 1px solid #444 !important;
+    }
+
+    .btn-branco button { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #888 !important; font-size: 13px !important; }
+    .btn-corrige button { background-color: #e65100 !important; color: #ffffff !important; border: none !important; font-size: 13px !important; }
+    .btn-confirma button { background-color: #1b5e20 !important; color: #ffffff !important; border: none !important; font-size: 14px !important; height: 60px !important; }
+
+    @media (max-width: 768px) {
+        .urna-tela {
+            min-height: 320px;
+            padding: 12px;
         }
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
+        .caixa-num {
+            width: 28px;
+            height: 36px;
+            font-size: 20px;
+            line-height: 32px;
         }
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🗳️ Eleições 2026 - Navegação Direta pelo Mapa")
+# ---------------------------------------------------------
+# Sons da Urna (Simulados em Web Audio/HTML5)
+# ---------------------------------------------------------
+def tocar_som(tipo="tecla"):
+    if tipo == "tecla":
+        st.markdown("""
+            <audio autoplay style="display:none;">
+                <source src="https://www.soundjay.com/buttons/sounds/button-16a.mp3" type="audio/mpeg">
+            </audio>
+        """, unsafe_allow_html=True)
+    elif tipo == "fim":
+        st.markdown("""
+            <audio autoplay style="display:none;">
+                <source src="https://www.soundjay.com/buttons/sounds/button-09.mp3" type="audio/mpeg">
+            </audio>
+        """, unsafe_allow_html=True)
 
-# Função de Leitura do Ficheiro CSV
+# ---------------------------------------------------------
+# Carregamento e Limpeza da Base de Dados
+# ---------------------------------------------------------
 @st.cache_data
-def carregar_dados(caminho):
-    encodings = ["latin-1", "iso-8859-1", "cp1252", "utf-8"]
-    for enc in encodings:
+def carregar_candidatos():
+    try:
+        df = pd.read_csv("Consulta_cand_2026_BRASIL.csv", sep=None, engine='python', encoding="utf-8", dtype=str)
+    except Exception:
         try:
-            df = pd.read_csv(caminho, sep=";", encoding=enc, low_memory=False)
-            return df
-        except (UnicodeDecodeError, Exception):
-            continue
-    return None
+            df = pd.read_csv("Consulta_cand_2026_BRASIL.csv", sep=None, engine='python', encoding="latin1", dtype=str)
+        except Exception:
+            return pd.DataFrame()
+            
+    df.columns = df.columns.str.strip()
+    for col in df.columns:
+        df[col] = df[col].astype(str).str.strip().str.upper()
+    return df
 
-# Topo: Seleção da Base de Dados
-tipo_base = st.radio(
-    "Escolha o foco de análise:",
-    ["Candidatos 2026", "Coligações e Partidos 2026"],
-    horizontal=True
-)
+df_candidatos = carregar_candidatos()
 
-arquivo = "consulta_cand_2026_BRASIL.csv" if tipo_base == "Candidatos 2026" else "consulta_coligacao_2026_BRASIL.csv"
-df_2026 = carregar_dados(arquivo)
+ufs_disponiveis = sorted(df_candidatos['SG_UF'].unique().tolist()) if not df_candidatos.empty and 'SG_UF' in df_candidatos.columns else ["MT", "RJ", "SP", "PE", "GO", "DF", "MG"]
 
-if df_2026 is not None:
-    cols = df_2026.columns.tolist()
-    
-    col_uf = next((c for c in cols if "SG_UF" in c.upper() or "UF" in c.upper()), None)
-    col_cargo = next((c for c in cols if "DS_CARGO" in c.upper() or "CARGO" in c.upper()), None)
-    col_partido = next((c for c in cols if "SG_PARTIDO" in c.upper() or "PARTIDO" in c.upper()), None)
-    
-    col_nome_urna = next((c for c in cols if "NM_URNA_CANDIDATO" in c.upper() or "NM_URNA" in c.upper()), None)
-    col_nome_cand = next((c for c in cols if "NM_CANDIDATO" in c.upper()), None)
-    col_num_cand = next((c for c in cols if "NR_CANDIDATO" in c.upper()), None)
+# Etapas Eleitorais Oficiais de 2026 (2 vagas para Senador)
+ETAPAS = [
+    {"cargo": "DEPUTADO FEDERAL", "digitos": 4, "filtro_cargo": ["DEPUTADO FEDERAL"], "permite_legenda": True},
+    {"cargo": "DEPUTADO ESTADUAL", "digitos": 5, "filtro_cargo": ["DEPUTADO ESTADUAL", "DEPUTADO DISTRITAL"], "permite_legenda": True},
+    {"cargo": "1º SENADOR", "digitos": 3, "filtro_cargo": ["SENADOR"], "permite_legenda": False, "chave": "senador1"},
+    {"cargo": "2º SENADOR", "digitos": 3, "filtro_cargo": ["SENADOR"], "permite_legenda": False, "chave": "senador2"},
+    {"cargo": "GOVERNADOR", "digitos": 2, "filtro_cargo": ["GOVERNADOR"], "permite_legenda": False},
+    {"cargo": "PRESIDENTE", "digitos": 2, "filtro_cargo": ["PRESIDENTE", "PRESIDENTE DA REPÚBLICA"], "permite_legenda": False}
+]
 
-    col_cand_principal = col_nome_urna if col_nome_urna else col_nome_cand
+if 'etapa_index' not in st.session_state:
+    st.session_state.etapa_index = 0
+if 'digitos' not in st.session_state:
+    st.session_state.digitos = ""
+if 'tipo_voto' not in st.session_state:
+    st.session_state.tipo_voto = "NOMINATIVO"
+if 'voto_senador1' not in st.session_state:
+    st.session_state.voto_senador1 = ""
+if 'uf_selecionada' not in st.session_state:
+    st.session_state.uf_selecionada = "MT" if "MT" in ufs_disponiveis else ufs_disponiveis[0]
+if 'tocar_som_tipo' not in st.session_state:
+    st.session_state.tocar_som_tipo = None
 
-    if "uf_mapa" not in st.session_state:
-        st.session_state["uf_mapa"] = "TODOS"
+if st.session_state.tocar_som_tipo:
+    tocar_som(st.session_state.tocar_som_tipo)
+    st.session_state.tocar_som_tipo = None
 
-    df_filtrado = df_2026.copy()
+etapa_atual = ETAPAS[st.session_state.etapa_index] if st.session_state.etapa_index < len(ETAPAS) else None
 
-    if col_uf and st.session_state["uf_mapa"] != "TODOS":
-        df_filtrado = df_filtrado[df_filtrado[col_uf] == st.session_state["uf_mapa"]]
+def pressionar_numero(num):
+    if etapa_atual and len(st.session_state.digitos) < etapa_atual["digitos"] and st.session_state.tipo_voto == "NOMINATIVO":
+        st.session_state.digitos += str(num)
+        st.session_state.tocar_som_tipo = "tecla"
 
-    # Filtros de Apoio
-    st.markdown("### 🔍 Filtros de Apoio")
-    f1, f2, f3, f4 = st.columns([1, 1, 1.5, 1])
+def pressionar_branco():
+    st.session_state.digitos = ""
+    st.session_state.tipo_voto = "BRANCO"
+    st.session_state.tocar_som_tipo = "tecla"
 
-    with f1:
-        if col_cargo:
-            lista_cargos = ["TODOS"] + sorted([str(x) for x in df_filtrado[col_cargo].dropna().unique()])
-            cargo_sel = st.selectbox("Cargo Disputado:", lista_cargos)
-            if cargo_sel != "TODOS":
-                df_filtrado = df_filtrado[df_filtrado[col_cargo] == cargo_sel]
+def pressionar_corrige():
+    st.session_state.digitos = ""
+    st.session_state.tipo_voto = "NOMINATIVO"
+    st.session_state.tocar_som_tipo = "tecla"
 
-    with f2:
-        if col_partido:
-            lista_partidos = ["TODOS"] + sorted([str(x) for x in df_filtrado[col_partido].dropna().unique()])
-            partido_sel = st.selectbox("Partido / Coligação:", lista_partidos)
-            if partido_sel != "TODOS":
-                df_filtrado = df_filtrado[df_filtrado[col_partido] == partido_sel]
+def pressionar_confirma():
+    if not etapa_atual:
+        return
+    qtd_dig = len(st.session_state.digitos)
+    if st.session_state.tipo_voto == "BRANCO" or qtd_dig == etapa_atual["digitos"] or (etapa_atual["permite_legenda"] and qtd_dig == 2):
+        # Armazena o voto do 1º Senador para evitar repetição no 2º Senador
+        if etapa_atual.get("chave") == "senador1":
+            st.session_state.voto_senador1 = st.session_state.digitos if st.session_state.tipo_voto == "NOMINATIVO" else "BRANCO"
 
-    with f3:
-        if col_cand_principal:
-            if col_num_cand:
-                df_filtrado["CANDIDATO_EXIBICAO"] = df_filtrado[col_cand_principal].astype(str) + " (" + df_filtrado[col_num_cand].astype(str) + ")"
-                col_busca_cand = "CANDIDATO_EXIBICAO"
+        st.session_state.etapa_index += 1
+        st.session_state.digitos = ""
+        st.session_state.tipo_voto = "NOMINATIVO"
+        st.session_state.tocar_som_tipo = "fim"
+
+def reiniciar():
+    st.session_state.etapa_index = 0
+    st.session_state.digitos = ""
+    st.session_state.tipo_voto = "NOMINATIVO"
+    st.session_state.voto_senador1 = ""
+
+# ---------------------------------------------------------
+# Interface Principal
+# ---------------------------------------------------------
+st.markdown("<h3 style='text-align: center; margin-bottom: 5px;'>Justiça Eleitoral</h3>", unsafe_allow_html=True)
+
+index_uf = ufs_disponiveis.index(st.session_state.uf_selecionada) if st.session_state.uf_selecionada in ufs_disponiveis else 0
+uf = st.selectbox("Estado da Votação (UF):", ufs_disponiveis, index=index_uf, key="uf_select")
+st.session_state.uf_selecionada = uf
+
+col_tela, col_teclado = st.columns([1.2, 1])
+
+# --- TELA DA URNA ---
+with col_tela:
+    if st.session_state.etapa_index >= len(ETAPAS):
+        st.markdown('''
+            <div class="urna-tela" style="justify-content: center; align-items: center; text-align: center;">
+                <h1 style="font-size: 90px; margin: 0; letter-spacing: 4px;">FIM</h1>
+                <p style="font-size: 22px; color: #1b5e20; font-weight: bold; margin-top: 10px;">VOTOU</p>
+            </div>
+        ''', unsafe_allow_html=True)
+        st.write("")
+        if st.button("REINICIAR VOTAÇÃO"):
+            reiniciar()
+            st.rerun()
+    else:
+        candidato_encontrado = None
+        legenda_encontrada = None
+        voto_duplicado_senador = False
+        qtd_digitos = etapa_atual["digitos"]
+        digitos_atuais = st.session_state.digitos
+        
+        # Alerta para o 2º Senador igual ao 1º
+        if etapa_atual.get("chave") == "senador2" and digitos_atuais != "" and digitos_atuais == st.session_state.voto_senador1:
+            voto_duplicado_senador = True
+
+        if not df_candidatos.empty:
+            df_filtrado = df_candidatos.copy()
+
+            if 'DS_CARGO' in df_filtrado.columns:
+                df_filtrado = df_filtrado[df_filtrado['DS_CARGO'].isin(etapa_atual["filtro_cargo"])]
+
+            if 'SG_UF' in df_filtrado.columns and etapa_atual["cargo"] != "PRESIDENTE":
+                df_filtrado = df_filtrado[df_filtrado['SG_UF'].isin([st.session_state.uf_selecionada, "BR"])]
+
+            if len(digitos_atuais) == qtd_digitos:
+                if 'NR_CANDIDATO' in df_filtrado.columns:
+                    match = df_filtrado[df_filtrado['NR_CANDIDATO'] == digitos_atuais]
+                    if not match.empty:
+                        candidato_encontrado = match.iloc[0]
+
+            elif etapa_atual["permite_legenda"] and len(digitos_atuais) == 2:
+                col_partido = 'NR_PARTIDO' if 'NR_PARTIDO' in df_filtrado.columns else 'NR_CANDIDATO'
+                match_leg = df_filtrado[df_filtrado[col_partido].str[:2] == digitos_atuais]
+                if not match_leg.empty:
+                    legenda_encontrada = match_leg.iloc[0]
+
+        boxes_html = "".join([f'<span class="caixa-num">{digitos_atuais[i] if i < len(digitos_atuais) else "&nbsp;"}</span>' for i in range(qtd_digitos)])
+
+        info_cand = ""
+        if st.session_state.tipo_voto == "BRANCO":
+            info_cand = "<h2 style='text-align:center; margin-top:25px;'>VOTO EM BRANCO</h2>"
+        else:
+            if voto_duplicado_senador:
+                detalhes = "<p style='color:#b71c1c; margin-top:10px; font-size:15px;'><b>SENADOR JÁ VOTADO!<br>NÃO É PERMITIDO REPETIR O MESMO CANDIDATO.</b></p>"
+            elif candidato_encontrado is not None:
+                nome = candidato_encontrado.get('NM_URNA_CANDIDATO', candidato_encontrado.get('NM_CANDIDATO', ''))
+                partido = candidato_encontrado.get('SG_PARTIDO', '')
+                detalhes = f"<p style='margin-top:10px; font-size:16px;'><b>Nome:</b> {nome}<br><b>Partido:</b> {partido}</p>"
+            elif legenda_encontrada is not None:
+                partido = legenda_encontrada.get('SG_PARTIDO', '')
+                detalhes = f"<p style='margin-top:10px; font-size:16px; color:#0d47a1;'><b>VOTO NA LEGENDA</b><br><b>Partido:</b> {partido}</p>"
+            elif len(digitos_atuais) == qtd_digitos or (not etapa_atual["permite_legenda"] and len(digitos_atuais) == 2):
+                detalhes = "<p style='color:#b71c1c; margin-top:10px; font-size:16px;'><b>NÚMERO ERRADO / VOTO NULO</b></p>"
             else:
-                col_busca_cand = col_cand_principal
+                detalhes = ""
+            info_cand = f'<div style="margin: 10px 0;">{boxes_html}</div>' + detalhes
 
-            lista_candidatos = ["TODOS"] + sorted([str(x) for x in df_filtrado[col_busca_cand].dropna().unique()])
-            cand_sel = st.selectbox("Selecione o Candidato pelo Nome:", lista_candidatos)
-            if cand_sel != "TODOS":
-                df_filtrado = df_filtrado[df_filtrado[col_busca_cand] == cand_sel]
+        st.markdown(f'''
+            <div class="urna-tela">
+                <div>
+                    <p style="font-size: 12px; margin-bottom: 2px; font-weight: bold; color: #333;">SEU VOTO VAI PARA</p>
+                    <h2 style="margin: 0; text-transform: uppercase; font-size: 22px; letter-spacing: 1px;">{etapa_atual["cargo"]}</h2>
+                    {info_cand}
+                </div>
+                <div>
+                    <hr style="border: 0.5px solid #888; margin-bottom: 8px;">
+                    <p style="font-size: 10px; line-height: 1.3; margin: 0;">
+                        Aperte a tecla:<br>
+                        <b>CONFIRMA</b> para CONFIRMAR este voto<br>
+                        <b>CORRIGE</b> para REINICIAR este voto
+                    </p>
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
 
-    with f4:
-        st.write("")
-        st.write("")
-        if st.session_state["uf_mapa"] != "TODOS":
-            if st.button("🇧🇷 Ver Brasil (Resetar Mapa)", use_container_width=True):
-                st.session_state["uf_mapa"] = "TODOS"
-                st.rerun()
-
-    st.markdown("---")
-
-    # --- MAPA REAJUSTADO (SEM ESPAÇO EM BRANCO) ---
-    st.subheader("🗺️ Toque em um Estado para Selecionar")
-    if col_uf:
-        df_mapa = df_2026.groupby(col_uf).size().reset_index(name="TOTAL")
-        geojson_url = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson"
-        
-        fig_mapa = px.choropleth(
-            df_mapa,
-            geojson=geojson_url,
-            locations=col_uf,
-            featureidkey="properties.sigla",
-            color="TOTAL",
-            color_continuous_scale="Blues",
-            labels={"TOTAL": "Registros", col_uf: "UF"},
-        )
-        
-        # Ajustes essenciais para remover espaços vazios no topo e na base do mapa
-        fig_mapa.update_geos(
-            fitbounds="locations",
-            visible=False,
-            projection_type="mercator"
-        )
-        fig_mapa.update_coloraxes(showscale=False)
-        fig_mapa.update_layout(
-            margin=dict(t=0, l=0, r=0, b=0),
-            autosize=True,
-            height=450,  # Reduzido de 700 para 450 para encaixar perfeitamente em telas móveis
-            clickmode="event+select"
-        )
-        
-        event_data = st.plotly_chart(
-            fig_mapa,
-            use_container_width=True,
-            on_select="rerun",
-            selection_mode="points"
-        )
-
-        if event_data and "selection" in event_data and "points" in event_data["selection"]:
-            pontos = event_data["selection"]["points"]
-            if pontos:
-                uf_clicada = pontos[0].get("location")
-                if uf_clicada and uf_clicada != st.session_state["uf_mapa"]:
-                    st.session_state["uf_mapa"] = uf_clicada
-                    st.rerun()
-
-    st.markdown("---")
-
-    # --- SEÇÃO DE INDICADORES ---
-    st.markdown("### 📊 Indicadores Gerais")
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.metric("Total de Registros", f"{len(df_filtrado):,}".replace(",", "."))
-    with m2:
-        if col_partido:
-            st.metric("Partidos na Análise", df_filtrado[col_partido].nunique())
-    with m3:
-        st.metric("Estado Selecionado no Mapa", st.session_state["uf_mapa"])
-
-    st.markdown("---")
+# --- TECLADO NUMÉRICO ---
+with col_teclado:
+    st.markdown('<div class="teclado-painel">', unsafe_allow_html=True)
     
-    # Exibição da Tabela Final
-    st.subheader(f"📋 Tabela Completa de Dados - {tipo_base}")
+    for r in range(3):
+        cols = st.columns(3)
+        for c in range(3):
+            val = r * 3 + c + 1
+            with cols[c]:
+                st.markdown('<div class="btn-num">', unsafe_allow_html=True)
+                if st.button(str(val), key=f"btn_{val}"):
+                    pressionar_numero(val)
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
 
-    cols_destaque = [c for c in [col_nome_urna, col_nome_cand, col_num_cand, col_cargo, col_partido, col_uf] if c and c in df_filtrado.columns]
-    cols_outras = [c for c in df_filtrado.columns if c not in cols_destaque and c != "CANDIDATO_EXIBICAO"]
+    _, col0, _ = st.columns(3)
+    with col0:
+        st.markdown('<div class="btn-num">', unsafe_allow_html=True)
+        if st.button("0", key="btn_0"):
+            pressionar_numero(0)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    st.dataframe(df_filtrado[cols_destaque + cols_outras], use_container_width=True)
+    st.write("")
 
-else:
-    st.error("Aguardando carregamento da base de dados...")
+    col_b, col_c, col_f = st.columns(3)
+    
+    with col_b:
+        st.markdown('<div class="btn-branco">', unsafe_allow_html=True)
+        if st.button("BRANCO", key="btn_branco"):
+            pressionar_branco()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_c:
+        st.markdown('<div class="btn-corrige">', unsafe_allow_html=True)
+        if st.button("CORRIGE", key="btn_corrige"):
+            pressionar_corrige()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_f:
+        st.markdown('<div class="btn-confirma">', unsafe_allow_html=True)
+        if st.button("CONFIRMA", key="btn_confirma"):
+            pressionar_confirma()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    st.markdown('</div>', unsafe_allow_html=True)
