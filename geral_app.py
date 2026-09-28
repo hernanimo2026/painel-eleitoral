@@ -54,52 +54,60 @@ if "votos" not in st.session_state:
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "MT"
 
-# --- ESTILIZAÇÃO PARA REPRODUZIR O DESIGN DA URNA ---
+# --- CSS ANTI-EMPILHAMENTO PARA MOBILE ---
 st.markdown("""
 <style>
-    /* Estilo do Visor */
+    /* Travar o empilhamento do Streamlit no telemóvel */
+    [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+    }
+    
+    [data-testid="column"] {
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Estilo do Visor Compacto */
     .visor-box {
         background-color: #dbe4db;
         border: 2px solid #111;
         border-radius: 8px;
-        padding: 15px;
-        min-height: 150px;
+        padding: 10px;
+        min-height: 120px;
         color: #000;
         font-family: Arial, sans-serif;
-        box-shadow: inset 0 0 8px rgba(0,0,0,0.2);
-        margin-bottom: 20px;
+        box-shadow: inset 0 0 6px rgba(0,0,0,0.2);
+        margin-bottom: 10px;
     }
     .digit-square {
         display: inline-block;
-        width: 30px;
-        height: 38px;
+        width: 24px;
+        height: 32px;
         border: 2px solid #000;
         background-color: #fff;
         color: #000;
-        font-size: 22px;
+        font-size: 18px;
         font-weight: bold;
         text-align: center;
-        line-height: 34px;
-        margin-right: 4px;
+        line-height: 28px;
+        margin-right: 3px;
     }
 
-    /* Estilização Geral dos Botões */
+    /* Estilização Compacta dos Botões Numéricos */
     div.stButton > button {
         border-radius: 6px !important;
         font-weight: bold !important;
-        height: 50px !important;
-        font-size: 18px !important;
-    }
-
-    /* Forçar layout lado a lado no mobile */
-    [data-testid="column"] {
-        width: 31% !important;
-        flex: 1 1 31% !important;
-        min-width: 31% !important;
+        height: 42px !important;
+        font-size: 16px !important;
+        padding: 0 !important;
     }
 
     /* Botões Numéricos Escuros */
-    div.stButton > button:not([kind="primary"]) {
+    div.stButton > button:not([key*="btn_branco"]):not([key*="btn_corrige"]):not([key*="btn_confirma"]) {
         background-color: #1e1e1e !important;
         color: #ffffff !important;
         border: 1px solid #000 !important;
@@ -110,7 +118,7 @@ st.markdown("""
         background-color: #ffffff !important;
         color: #000000 !important;
         border: 1px solid #ccc !important;
-        font-size: 13px !important;
+        font-size: 11px !important;
     }
 
     /* Botão CORRIGE */
@@ -118,7 +126,7 @@ st.markdown("""
         background-color: #f26522 !important;
         color: #ffffff !important;
         border: none !important;
-        font-size: 13px !important;
+        font-size: 11px !important;
     }
 
     /* Botão CONFIRMA */
@@ -126,23 +134,25 @@ st.markdown("""
         background-color: #008000 !important;
         color: #ffffff !important;
         border: none !important;
-        font-size: 13px !important;
+        font-size: 11px !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Topo da aplicação
-st.title("🗳️ Urna Eletrônica")
-
-ufs = sorted(df_candidatos[col_uf].dropna().unique().tolist()) if col_uf else ['MT', 'SP', 'RJ']
-st.session_state.uf_sel = st.selectbox("Selecione o Estado (UF):", ufs, index=ufs.index(st.session_state.uf_sel) if st.session_state.uf_sel in ufs else 0)
+# Topo compacto
+c_title, c_uf = st.columns([2, 1])
+with c_title:
+    st.markdown("### 🗳️ Urna 2026")
+with c_uf:
+    ufs = sorted(df_candidatos[col_uf].dropna().unique().tolist()) if col_uf else ['MT', 'SP', 'RJ']
+    st.session_state.uf_sel = st.selectbox("UF", ufs, index=ufs.index(st.session_state.uf_sel) if st.session_state.uf_sel in ufs else 0, label_visibility="collapsed")
 
 # TELA DE FIM
 if st.session_state.etapa >= len(ETAPAS):
     st.balloons()
     st.markdown("""
-    <div class='visor-box' style='text-align: center; padding-top: 30px;'>
-        <h1 style='font-size: 50px; margin: 0; color: #000;'>FIM</h1>
+    <div class='visor-box' style='text-align: center; padding-top: 20px;'>
+        <h1 style='font-size: 40px; margin: 0; color: #000;'>FIM</h1>
         <p style='font-size: 14px; color: #333;'>VOTAÇÃO CONCLUÍDA</p>
     </div>
     """, unsafe_allow_html=True)
@@ -185,22 +195,22 @@ boxes_html = "".join([f"<div class='digit-square'>{dig[i] if i < len(dig) else '
 
 cand_info = ""
 if repetido_senador:
-    cand_info = "<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px; color: red;'><b>CANDIDATO JÁ VOTADO NA 1ª VAGA<br>VOTO SERÁ NULO</b></div>"
+    cand_info = "<div style='margin-top: 6px; border-top: 1px solid #777; padding-top: 2px; color: red;'><b>CANDIDATO JÁ VOTADO NA 1ª VAGA (NULO)</b></div>"
 elif len(dig) == etapa["digitos"] or (len(dig) == 2 and e_legenda):
     if cand is not None:
         if e_legenda:
-            cand_info = f"<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px;'><b>VOTO NA LEGENDA</b><br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
+            cand_info = f"<div style='margin-top: 6px; border-top: 1px solid #777; padding-top: 2px;'><b>VOTO LEGENDA</b> - {cand.get(col_partido, 'N/A')}</div>"
         else:
-            cand_info = f"<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px;'><b>Nome:</b> {cand.get(col_nome, 'N/A')}<br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
+            cand_info = f"<div style='margin-top: 6px; border-top: 1px solid #777; padding-top: 2px;'><b>{cand.get(col_nome, 'N/A')}</b> ({cand.get(col_partido, 'N/A')})</div>"
     else:
-        cand_info = "<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px; color: red;'><b>VOTO NULO</b></div>"
+        cand_info = "<div style='margin-top: 6px; border-top: 1px solid #777; padding-top: 2px; color: red;'><b>VOTO NULO</b></div>"
 
 st.markdown(f"""
 <div class='visor-box'>
-    <p style='font-size: 11px; margin-bottom: 2px; color: #444;'>SEU VOTO VAI PARA</p>
-    <h3 style='font-size: 18px; margin-top: 0; color: #000;'>{etapa['cargo']}</h3>
-    <div style='margin-top: 6px; margin-bottom: 6px;'>
-        <span style='font-size: 13px; margin-right: 4px;'>Número:</span>{boxes_html}
+    <p style='font-size: 10px; margin: 0; color: #555;'>SEU VOTO VAI PARA</p>
+    <h4 style='font-size: 16px; margin: 2px 0; color: #000;'>{etapa['cargo']}</h4>
+    <div style='margin: 4px 0;'>
+        <span style='font-size: 12px; margin-right: 4px;'>Nº:</span>{boxes_html}
     </div>
     {cand_info}
 </div>
@@ -211,7 +221,7 @@ def press(n):
     if len(st.session_state.digitos) < etapa["digitos"]:
         st.session_state.digitos += str(n)
 
-# TECLADO NUMÉRICO ESTILIZADO
+# TECLADO NUMÉRICO COMPACTO (3 COLUNAS FIXAS)
 c1, c2, c3 = st.columns(3)
 with c1:
     if st.button("1", key="btn_1", use_container_width=True): press(1); st.rerun()
