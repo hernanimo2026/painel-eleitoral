@@ -54,32 +54,79 @@ if "votos" not in st.session_state:
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "MT"
 
-# --- CSS MÍNIMO E SEGURO ---
+# --- ESTILIZAÇÃO PARA REPRODUZIR O DESIGN DA URNA ---
 st.markdown("""
 <style>
+    /* Estilo do Visor */
     .visor-box {
         background-color: #dbe4db;
-        border: 2px solid #222;
-        border-radius: 6px;
-        padding: 12px;
-        min-height: 140px;
+        border: 2px solid #111;
+        border-radius: 8px;
+        padding: 15px;
+        min-height: 150px;
         color: #000;
         font-family: Arial, sans-serif;
-        box-shadow: inset 0 0 6px rgba(0,0,0,0.15);
-        margin-bottom: 15px;
+        box-shadow: inset 0 0 8px rgba(0,0,0,0.2);
+        margin-bottom: 20px;
     }
     .digit-square {
         display: inline-block;
-        width: 26px;
-        height: 32px;
+        width: 30px;
+        height: 38px;
         border: 2px solid #000;
         background-color: #fff;
         color: #000;
-        font-size: 18px;
+        font-size: 22px;
         font-weight: bold;
         text-align: center;
-        line-height: 28px;
+        line-height: 34px;
         margin-right: 4px;
+    }
+
+    /* Estilização Geral dos Botões */
+    div.stButton > button {
+        border-radius: 6px !important;
+        font-weight: bold !important;
+        height: 50px !important;
+        font-size: 18px !important;
+    }
+
+    /* Forçar layout lado a lado no mobile */
+    [data-testid="column"] {
+        width: 31% !important;
+        flex: 1 1 31% !important;
+        min-width: 31% !important;
+    }
+
+    /* Botões Numéricos Escuros */
+    div.stButton > button:not([kind="primary"]) {
+        background-color: #1e1e1e !important;
+        color: #ffffff !important;
+        border: 1px solid #000 !important;
+    }
+
+    /* Botão BRANCO */
+    div.stButton > button[key*="btn_branco"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #ccc !important;
+        font-size: 13px !important;
+    }
+
+    /* Botão CORRIGE */
+    div.stButton > button[key*="btn_corrige"] {
+        background-color: #f26522 !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-size: 13px !important;
+    }
+
+    /* Botão CONFIRMA */
+    div.stButton > button[key*="btn_confirma"] {
+        background-color: #008000 !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-size: 13px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -117,7 +164,7 @@ cand = None
 e_legenda = False
 repetido_senador = False
 
-# VERIFICAÇÃO SE É O MESMO SENADOR DA 1ª VAGA
+# Validação do segundo Senador
 if etapa["cargo"] == "SENADOR (2ª VAGA)" and dig != "":
     voto_sen1 = st.session_state.votos.get("SENADOR (1ª VAGA)", "")
     if dig == voto_sen1 and dig not in ["BRANCO", "NULO"]:
@@ -164,57 +211,55 @@ def press(n):
     if len(st.session_state.digitos) < etapa["digitos"]:
         st.session_state.digitos += str(n)
 
-# TECLADO NUMÉRICO
+# TECLADO NUMÉRICO ESTILIZADO
 c1, c2, c3 = st.columns(3)
 with c1:
-    if st.button("1", use_container_width=True): press(1); st.rerun()
+    if st.button("1", key="btn_1", use_container_width=True): press(1); st.rerun()
 with c2:
-    if st.button("2", use_container_width=True): press(2); st.rerun()
+    if st.button("2", key="btn_2", use_container_width=True): press(2); st.rerun()
 with c3:
-    if st.button("3", use_container_width=True): press(3); st.rerun()
+    if st.button("3", key="btn_3", use_container_width=True): press(3); st.rerun()
 
 c4, c5, c6 = st.columns(3)
 with c4:
-    if st.button("4", use_container_width=True): press(4); st.rerun()
+    if st.button("4", key="btn_4", use_container_width=True): press(4); st.rerun()
 with c5:
-    if st.button("5", use_container_width=True): press(5); st.rerun()
+    if st.button("5", key="btn_5", use_container_width=True): press(5); st.rerun()
 with c6:
-    if st.button("6", use_container_width=True): press(6); st.rerun()
+    if st.button("6", key="btn_6", use_container_width=True): press(6); st.rerun()
 
 c7, c8, c9 = st.columns(3)
 with c7:
-    if st.button("7", use_container_width=True): press(7); st.rerun()
+    if st.button("7", key="btn_7", use_container_width=True): press(7); st.rerun()
 with c8:
-    if st.button("8", use_container_width=True): press(8); st.rerun()
+    if st.button("8", key="btn_8", use_container_width=True): press(8); st.rerun()
 with c9:
-    if st.button("9", use_container_width=True): press(9); st.rerun()
+    if st.button("9", key="btn_9", use_container_width=True): press(9); st.rerun()
 
 _, c0, _ = st.columns(3)
 with c0:
-    if st.button("0", use_container_width=True): press(0); st.rerun()
+    if st.button("0", key="btn_0", use_container_width=True): press(0); st.rerun()
 
-st.divider()
+st.write("")
 
 # BOTÕES DE AÇÃO
 act1, act2, act3 = st.columns(3)
 
 with act1:
-    if st.button("⚪ BRANCO", use_container_width=True):
+    if st.button("BRANCO", key="btn_branco", use_container_width=True):
         st.session_state.votos[etapa["cargo"]] = "BRANCO"
         st.session_state.etapa += 1
         st.session_state.digitos = ""
         st.rerun()
 
 with act2:
-    if st.button("🟠 CORRIGE", use_container_width=True):
+    if st.button("CORRIGE", key="btn_corrige", use_container_width=True):
         st.session_state.digitos = ""
         st.rerun()
 
 with act3:
-    if st.button("🟢 CONFIRMA", type="primary", use_container_width=True):
+    if st.button("CONFIRMA", key="btn_confirma", use_container_width=True):
         voto_final = st.session_state.digitos if st.session_state.digitos else "NULO"
-        
-        # Se for repetido no 2º Senador, invalida o voto marcando como NULO
         if repetido_senador:
             voto_final = "NULO"
             
