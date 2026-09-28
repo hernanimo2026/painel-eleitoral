@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import os
 
@@ -54,45 +55,25 @@ if "votos" not in st.session_state:
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "MT"
 
-# --- CSS COM TECLADO COMPACTO ---
+# Ajustar margens nativas
 st.markdown("""
 <style>
-    /* Limita o container principal para centralizar como uma urna */
     .main .block-container {
-        max-width: 360px !important;
-        padding-left: 8px !important;
-        padding-right: 8px !important;
+        max-width: 380px !important;
+        padding: 8px !important;
         margin: 0 auto !important;
     }
-
-    /* Força colunas a manterem layout horizontal compacto */
-    div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 4px !important;
-        justify-content: center !important;
-    }
-
-    div[data-testid="column"] {
-        flex: 1 1 0% !important;
-        min-width: 0px !important;
-    }
-
-    /* Visor estilo Urna */
     .visor-box {
         background-color: #dbe4db;
         border: 2px solid #222;
         border-radius: 6px;
-        padding: 10px;
-        min-height: 180px;
+        padding: 12px;
+        min-height: 160px;
         color: #000;
         font-family: Arial, sans-serif;
         box-shadow: inset 0 0 6px rgba(0,0,0,0.15);
-        margin-bottom: 10px;
+        margin-bottom: 12px;
     }
-
-    /* Quadrados dos dígitos */
     .digit-square {
         display: inline-block;
         width: 26px;
@@ -104,47 +85,12 @@ st.markdown("""
         font-weight: bold;
         text-align: center;
         line-height: 28px;
-        margin-right: 2px;
-    }
-
-    /* Botões numéricos menores e compactos */
-    div[data-testid="stButton"] button {
-        width: 100% !important;
-        height: 40px !important;
-        border-radius: 5px !important;
-        font-weight: bold !important;
-        background-color: #1a1a1a !important;
-        color: #ffffff !important;
-        font-size: 16px !important;
-        border: 1px solid #000 !important;
-        padding: 0px !important;
-    }
-
-    /* Botões de Ação (Ajustados no mesmo padrão compacto) */
-    div[data-testid="stElementContainer"]:has(button[key="btn_branco"]) button {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        font-size: 9px !important;
-        height: 42px !important;
-    }
-
-    div[data-testid="stElementContainer"]:has(button[key="btn_corrige"]) button {
-        background-color: #f37021 !important;
-        color: #000000 !important;
-        font-size: 9px !important;
-        height: 42px !important;
-    }
-
-    div[data-testid="stElementContainer"]:has(button[key="btn_confirma"]) button {
-        background-color: #008000 !important;
-        color: #ffffff !important;
-        font-size: 9px !important;
-        height: 48px !important;
+        margin-right: 3px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Topo da aplicação
+# Topo
 c_tit, c_uf = st.columns([2.5, 1])
 with c_tit:
     st.markdown("### 🗳️ Urna Eletrônica")
@@ -212,61 +158,78 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# TECLADO NUMÉRICO COMPACTO
-def press(n):
-    if len(st.session_state.digitos) < etapa["digitos"]:
-        st.session_state.digitos += str(n)
-
-# Linhas numéricas (1 a 9)
-c1, c2, c3 = st.columns(3)
-with c1:
-    if st.button("1", key="b1", use_container_width=True): press(1); st.rerun()
-with c2:
-    if st.button("2", key="b2", use_container_width=True): press(2); st.rerun()
-with c3:
-    if st.button("3", key="b3", use_container_width=True): press(3); st.rerun()
-
-c4, c5, c6 = st.columns(3)
-with c4:
-    if st.button("4", key="b4", use_container_width=True): press(4); st.rerun()
-with c5:
-    if st.button("5", key="b5", use_container_width=True): press(5); st.rerun()
-with c6:
-    if st.button("6", key="b6", use_container_width=True): press(6); st.rerun()
-
-c7, c8, c9 = st.columns(3)
-with c7:
-    if st.button("7", key="b7", use_container_width=True): press(7); st.rerun()
-with c8:
-    if st.button("8", key="b8", use_container_width=True): press(8); st.rerun()
-with c9:
-    if st.button("9", key="b9", use_container_width=True): press(9); st.rerun()
-
-# Linha do botão 0
-_, c0, _ = st.columns(3)
-with c0:
-    if st.button("0", key="b0", use_container_width=True): press(0); st.rerun()
-
-st.markdown("<div style='margin-top: 4px;'></div>", unsafe_allow_html=True)
-
-# BOTÕES DE AÇÃO (BRANCO, CORRIGE, CONFIRMA)
-act1, act2, act3 = st.columns(3)
-
-with act1:
-    if st.button("BRANCO", key="btn_branco", use_container_width=True):
+# PROCESSAMENTO DE CLIQUES DO COMPONENTE HTML
+if "last_action" in st.query_params:
+    act = st.query_params["last_action"]
+    st.query_params.clear()
+    
+    if act in [str(i) for i in range(10)]:
+        if len(st.session_state.digitos) < etapa["digitos"]:
+            st.session_state.digitos += act
+    elif act == "BRANCO":
         st.session_state.votos[etapa["cargo"]] = "BRANCO"
         st.session_state.etapa += 1
         st.session_state.digitos = ""
-        st.rerun()
-
-with act2:
-    if st.button("CORRIGE", key="btn_corrige", use_container_width=True):
+    elif act == "CORRIGE":
         st.session_state.digitos = ""
-        st.rerun()
-
-with act3:
-    if st.button("CONFIRMA", key="btn_confirma", use_container_width=True):
+    elif act == "CONFIRMA":
         st.session_state.votos[etapa["cargo"]] = st.session_state.digitos if st.session_state.digitos else "NULO"
         st.session_state.etapa += 1
         st.session_state.digitos = ""
-        st.rerun()
+    st.rerun()
+
+# TECLADO HTML PERFEITO E RESPONSIVO
+html_teclado = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; padding: 4px; }
+  button {
+    background-color: #1a1a1a; color: white; border: none; border-radius: 5px;
+    font-size: 18px; font-weight: bold; height: 44px; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3); width: 100%;
+  }
+  button:active { background-color: #444; }
+  .btn-empty { background: transparent; box-shadow: none; cursor: default; }
+  .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; padding: 4px; margin-top: 6px; }
+  .btn-branco { background-color: #ffffff; color: #000000; font-size: 10px; border: 1px solid #ccc; height: 44px; }
+  .btn-corrige { background-color: #f37021; color: #000000; font-size: 10px; height: 44px; }
+  .btn-confirma { background-color: #008000; color: #ffffff; font-size: 10px; height: 50px; }
+</style>
+</head>
+<body>
+  <div class="keypad">
+    <button onclick="send('1')">1</button>
+    <button onclick="send('2')">2</button>
+    <button onclick="send('3')">3</button>
+    <button onclick="send('4')">4</button>
+    <button onclick="send('5')">5</button>
+    <button onclick="send('6')">6</button>
+    <button onclick="send('7')">7</button>
+    <button onclick="send('8')">8</button>
+    <button onclick="send('9')">9</button>
+    <div class="btn-empty"></div>
+    <button onclick="send('0')">0</button>
+    <div class="btn-empty"></div>
+  </div>
+  <div class="actions">
+    <button class="btn-branco" onclick="send('BRANCO')">BRANCO</button>
+    <button class="btn-corrige" onclick="send('CORRIGE')">CORRIGE</button>
+    <button class="btn-confirma" onclick="send('CONFIRMA')">CONFIRMA</button>
+  </div>
+  <script>
+    function send(val) {
+      window.parent.postMessage({
+        type: 'streamlit:setQueryParams',
+        queryParams: { last_action: val }
+      }, '*');
+    }
+  </script>
+</body>
+</html>
+"""
+
+components.html(html_teclado, height=270)
