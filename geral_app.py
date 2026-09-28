@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-st.set_page_config(page_title="Urna Eletrônica 2026", layout="centered")
+st.set_page_config(page_title="Simulador de Votação 2026", layout="centered")
 
 # --- LEITURA DA BASE DE DADOS ---
 @st.cache_data
@@ -35,218 +35,93 @@ col_partido = next((c for c in ['SG_PARTIDO', 'PARTIDO'] if c in df_candidatos.c
 col_uf = next((c for c in ['SG_UF', 'UF'] if c in df_candidatos.columns), None)
 col_cargo = next((c for c in ['DS_CARGO', 'CARGO'] if c in df_candidatos.columns), None)
 
-# --- ETAPAS DA VOTAÇÃO OFICIAL 2026 (6 VOTOS COM 2 SENADORES) ---
+# ETAPAS DA VOTAÇÃO 2026
 ETAPAS = [
-    {"cargo": "DEPUTADO FEDERAL", "digitos": 4, "legenda": True, "filtro": ["DEPUTADO FEDERAL"]},
-    {"cargo": "DEPUTADO ESTADUAL", "digitos": 5, "legenda": True, "filtro": ["DEPUTADO ESTADUAL", "DEPUTADO DISTRITAL"]},
-    {"cargo": "SENADOR (1ª VAGA)", "digitos": 3, "legenda": False, "filtro": ["SENADOR"]},
-    {"cargo": "SENADOR (2ª VAGA)", "digitos": 3, "legenda": False, "filtro": ["SENADOR"]},
-    {"cargo": "GOVERNADOR", "digitos": 2, "legenda": False, "filtro": ["GOVERNADOR"]},
-    {"cargo": "PRESIDENTE", "digitos": 2, "legenda": False, "filtro": ["PRESIDENTE"]}
+    {"cargo": "DEPUTADO FEDERAL", "digitos": 4, "filtro": ["DEPUTADO FEDERAL"]},
+    {"cargo": "DEPUTADO ESTADUAL", "digitos": 5, "filtro": ["DEPUTADO ESTADUAL", "DEPUTADO DISTRITAL"]},
+    {"cargo": "SENADOR (1ª VAGA)", "digitos": 3, "filtro": ["SENADOR"]},
+    {"cargo": "SENADOR (2ª VAGA)", "digitos": 3, "filtro": ["SENADOR"]},
+    {"cargo": "GOVERNADOR", "digitos": 2, "filtro": ["GOVERNADOR"]},
+    {"cargo": "PRESIDENTE", "digitos": 2, "filtro": ["PRESIDENTE"]}
 ]
 
 if "etapa" not in st.session_state:
     st.session_state.etapa = 0
-if "digitos" not in st.session_state:
-    st.session_state.digitos = ""
 if "votos" not in st.session_state:
     st.session_state.votos = {}
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "MT"
 
-# ESTILIZAÇÃO CSS
-st.markdown("""
-<style>
-    /* Força botões do teclado lado a lado no telemóvel */
-    div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 6px !important;
-    }
-
-    div[data-testid="column"] {
-        width: 100% !important;
-        min-width: 0px !important;
-        flex: 1 1 0% !important;
-    }
-
-    /* Visor */
-    .visor-container {
-        background-color: #dbe4db;
-        border: 2px solid #222;
-        border-radius: 8px;
-        padding: 15px;
-        min-height: 260px;
-        color: #111;
-        font-family: Arial, sans-serif;
-        margin-bottom: 15px;
-    }
-
-    /* Quadrados dos dígitos */
-    .digit-box {
-        display: inline-block;
-        width: 35px;
-        height: 45px;
-        border: 2px solid #000;
-        background-color: #fff;
-        color: #000;
-        font-size: 24px;
-        font-weight: bold;
-        text-align: center;
-        line-height: 40px;
-        margin-right: 3px;
-    }
-
-    .info-cand {
-        margin-top: 12px;
-        padding-top: 8px;
-        border-top: 1px solid #888;
-        font-size: 16px;
-    }
-
-    /* Teclas do Teclado */
-    div[data-testid="stColumn"] button {
-        background-color: #111 !important;
-        color: #fff !important;
-        font-size: 20px !important;
-        font-weight: bold !important;
-        height: 50px !important;
-        border-radius: 6px !important;
-        border: 1px solid #000 !important;
-        padding: 2px !important;
-    }
-
-    /* Tecla BRANCO */
-    div[data-testid="stColumn"]:has(button:contains("BRANCO")) button {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        font-size: 12px !important;
-    }
-
-    /* Tecla CORRIGE */
-    div[data-testid="stColumn"]:has(button:contains("CORRIGE")) button {
-        background-color: #f37021 !important;
-        color: #000000 !important;
-        font-size: 12px !important;
-    }
-
-    /* Tecla CONFIRMA */
-    div[data-testid="stColumn"]:has(button:contains("CONFIRMA")) button {
-        background-color: #008000 !important;
-        color: #ffffff !important;
-        font-size: 11px !important;
-        height: 58px !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Topo
+# Cabeçalho
 c_tit, c_uf = st.columns([2.5, 1])
 with c_tit:
-    st.title("🗳️ Urna Eletrônica 2026")
+    st.title("🗳️ Simulação Eleições 2026")
 with c_uf:
     ufs = sorted(df_candidatos[col_uf].dropna().unique().tolist()) if col_uf else ['MT', 'SP', 'RJ']
     st.session_state.uf_sel = st.selectbox("UF:", ufs, index=ufs.index(st.session_state.uf_sel) if st.session_state.uf_sel in ufs else 0)
 
-# FIM DA VOTAÇÃO
+# Fim da Votação
 if st.session_state.etapa >= len(ETAPAS):
     st.balloons()
-    st.markdown("""
-    <div class='visor-container' style='text-align: center; padding-top: 60px;'>
-        <h1 style='font-size: 80px; margin: 0; color: #000;'>FIM</h1>
-        <p style='font-size: 20px; color: #333;'>VOTAÇÃO CONCLUÍDA</p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Reiniciar Votação", use_container_width=True):
+    st.success("🎉 VOTAÇÃO CONCLUÍDA COM SUCESSO!")
+    st.subheader("Resumo dos seus votos:")
+    for cargo, voto in st.session_state.votos.items():
+        st.write(f"• **{cargo}:** {voto}")
+    
+    st.divider()
+    if st.button("🔄 Reiniciar Votação", type="primary", use_container_width=True):
         st.session_state.etapa = 0
-        st.session_state.digitos = ""
         st.session_state.votos = {}
         st.rerun()
     st.stop()
 
 etapa = ETAPAS[st.session_state.etapa]
 
-# Filtrar dados por UF e Cargo
+# Filtragem de Dados
 df_uf = df_candidatos[df_candidatos[col_uf].isin([st.session_state.uf_sel, 'BR'])] if col_uf else df_candidatos
 df_cargo = df_uf[df_uf[col_cargo].isin(etapa["filtro"])] if col_cargo else df_uf
 
-dig = st.session_state.digitos
-cand = None
-e_legenda = False
+st.subheader(f"Voto para: {etapa['cargo']}")
+st.caption(f"Digite o número de {etapa['digitos']} dígitos ou selecione na lista.")
 
-if len(dig) == etapa["digitos"]:
-    m = df_cargo[df_cargo[col_num] == dig] if col_num else pd.DataFrame()
-    if not m.empty:
-        cand = m.iloc[0]
-elif len(dig) == 2 and etapa["legenda"]:
-    m_leg = df_cargo[df_cargo[col_num].str.startswith(dig)] if col_num else pd.DataFrame()
-    if not m_leg.empty:
-        cand = m_leg.iloc[0]
-        e_legenda = True
+# Entrada do Número pelo Teclado Nativo
+numero_digitado = st.text_input(
+    f"Número do candidato ({etapa['digitos']} dígitos):",
+    max_chars=etapa["digitos"],
+    key=f"input_{st.session_state.etapa}"
+)
 
-# VISOR
-boxes_html = "".join([f"<div class='digit-box'>{dig[i] if i < len(dig) else ''}</div>" for i in range(etapa["digitos"])])
+cand_encontrado = None
+if len(numero_digitado) == etapa["digitos"]:
+    match = df_cargo[df_cargo[col_num] == numero_digitado] if col_num else pd.DataFrame()
+    if not match.empty:
+        cand_encontrado = match.iloc[0]
 
-cand_info = ""
-if len(dig) == etapa["digitos"] or (len(dig) == 2 and e_legenda):
-    if cand is not None:
-        if e_legenda:
-            cand_info = f"<div class='info-cand'><b>VOTO NA LEGENDA</b><br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
-        else:
-            cand_info = f"<div class='info-cand'><b>Nome:</b> {cand.get(col_nome, 'N/A')}<br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
-    else:
-        cand_info = "<div class='info-cand' style='color: red;'><b>VOTO NULO</b></div>"
+if cand_encontrado is not None:
+    st.info(f"👤 **Candidato:** {cand_encontrado.get(col_nome, 'N/A')}\n\n🚩 **Partido:** {cand_encontrado.get(col_partido, 'N/A')}")
+elif len(numero_digitado) == etapa["digitos"]:
+    st.warning("⚠️ Número não encontrado na base (será considerado Voto Nulo).")
 
-st.markdown(f"""
-<div class='visor-container'>
-    <p style='font-size: 13px; margin-bottom: 2px; color: #444;'>SEU VOTO VAI PARA</p>
-    <h3 style='font-size: 20px; margin-top: 0; color: #000;'>{etapa['cargo']}</h3>
-    <div style='margin-top: 15px; margin-bottom: 15px;'>
-        <span style='font-size: 15px; margin-right: 5px;'>Número:</span>{boxes_html}
-    </div>
-    {cand_info}
-</div>
-""", unsafe_allow_html=True)
+st.divider()
 
-# TECLADO
-def press(n):
-    if len(st.session_state.digitos) < etapa["digitos"]:
-        st.session_state.digitos += str(n)
+# Botões de Ação Nativos do Streamlit
+c_branco, c_confirma = st.columns(2)
 
-k1, k2, k3 = st.columns(3)
-with k1:
-    if st.button("1", key="btn_1", use_container_width=True): press(1); st.rerun()
-    if st.button("4", key="btn_4", use_container_width=True): press(4); st.rerun()
-    if st.button("7", key="btn_7", use_container_width=True): press(7); st.rerun()
-with k2:
-    if st.button("2", key="btn_2", use_container_width=True): press(2); st.rerun()
-    if st.button("5", key="btn_5", use_container_width=True): press(5); st.rerun()
-    if st.button("8", key="btn_8", use_container_width=True): press(8); st.rerun()
-    if st.button("0", key="btn_0", use_container_width=True): press(0); st.rerun()
-with k3:
-    if st.button("3", key="btn_3", use_container_width=True): press(3); st.rerun()
-    if st.button("6", key="btn_6", use_container_width=True): press(6); st.rerun()
-    if st.button("9", key="btn_9", use_container_width=True): press(9); st.rerun()
-
-st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-
-# BOTOES DE AÇÃO
-b1, b2, b3 = st.columns(3)
-with b1:
-    if st.button("BRANCO", key="btn_branco", use_container_width=True):
+with c_branco:
+    if st.button("⚪ Votar em Branco", use_container_width=True):
         st.session_state.votos[etapa["cargo"]] = "BRANCO"
         st.session_state.etapa += 1
-        st.session_state.digitos = ""
         st.rerun()
-with b2:
-    if st.button("CORRIGE", key="btn_corrige", use_container_width=True):
-        st.session_state.digitos = ""
-        st.rerun()
-with b3:
-    if st.button("CONFIRMA", key="btn_confirma", use_container_width=True):
-        st.session_state.votos[etapa["cargo"]] = st.session_state.digitos if st.session_state.digitos else "NULO"
+
+with c_confirma:
+    if st.button("🟢 Confirmar Voto", type="primary", use_container_width=True):
+        if len(numero_digitado) == etapa["digitos"]:
+            if cand_encontrado is not None:
+                st.session_state.votos[etapa["cargo"]] = f"{numero_digitado} - {cand_encontrado.get(col_nome, '')}"
+            else:
+                st.session_state.votos[etapa["cargo"]] = f"{numero_digitado} (NULO)"
+        else:
+            st.session_state.votos[etapa["cargo"]] = "NULO"
+            
         st.session_state.etapa += 1
-        st.session_state.digitos = ""
         st.rerun()
