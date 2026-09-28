@@ -54,107 +54,41 @@ if "votos" not in st.session_state:
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "MT"
 
-# --- CSS RESPONSIVO PARA COLUNAS E BOTÕES NATIVOS ---
+# --- CSS MÍNIMO E SEGURO (Apenas para o visor e quadrados dos números) ---
 st.markdown("""
 <style>
-    /* Ajusta padding geral da aplicação */
-    .main .block-container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-        padding-top: 0.5rem !important;
-        max-width: 400px !important;
-        margin: 0 auto !important;
-    }
-
-    /* Força alinhamento estrito em 3 colunas sem quebrar no mobile */
-    div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 6px !important;
-        width: 100% !important;
-    }
-
-    div[data-testid="column"] {
-        flex: 1 1 0% !important;
-        min-width: 0px !important;
-        padding: 0px !important;
-    }
-
-    /* Estilo do visor */
     .visor-box {
         background-color: #dbe4db;
         border: 2px solid #222;
         border-radius: 6px;
-        padding: 10px;
-        min-height: 150px;
+        padding: 12px;
+        min-height: 140px;
         color: #000;
         font-family: Arial, sans-serif;
         box-shadow: inset 0 0 6px rgba(0,0,0,0.15);
-        margin-bottom: 8px;
+        margin-bottom: 15px;
     }
-
-    /* Quadrados dos dígitos */
     .digit-square {
         display: inline-block;
-        width: 24px;
-        height: 30px;
+        width: 26px;
+        height: 32px;
         border: 2px solid #000;
         background-color: #fff;
         color: #000;
-        font-size: 16px;
+        font-size: 18px;
         font-weight: bold;
         text-align: center;
-        line-height: 26px;
-        margin-right: 2px;
-    }
-
-    /* Botões numéricos */
-    div[data-testid="stButton"] button {
-        width: 100% !important;
-        height: 46px !important;
-        border-radius: 6px !important;
-        font-weight: bold !important;
-        background-color: #1a1a1a !important;
-        color: #ffffff !important;
-        font-size: 18px !important;
-        border: none !important;
-        padding: 0px !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-    }
-
-    /* Estilização dos botões de ação */
-    div[data-testid="stElementContainer"]:has(button[key="btn_branco"]) button {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        font-size: 10px !important;
-        border: 1px solid #ccc !important;
-        height: 46px !important;
-    }
-
-    div[data-testid="stElementContainer"]:has(button[key="btn_corrige"]) button {
-        background-color: #f37021 !important;
-        color: #000000 !important;
-        font-size: 10px !important;
-        height: 46px !important;
-    }
-
-    div[data-testid="stElementContainer"]:has(button[key="btn_confirma"]) button {
-        background-color: #008000 !important;
-        color: #ffffff !important;
-        font-size: 10px !important;
-        height: 50px !important;
+        line-height: 28px;
+        margin-right: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Topo da página
-c_tit, c_uf = st.columns([2.5, 1])
-with c_tit:
-    st.markdown("### 🗳️ Urna Eletrônica")
-with c_uf:
-    ufs = sorted(df_candidatos[col_uf].dropna().unique().tolist()) if col_uf else ['MT', 'SP', 'RJ']
-    st.session_state.uf_sel = st.selectbox("UF:", ufs, index=ufs.index(st.session_state.uf_sel) if st.session_state.uf_sel in ufs else 0)
+# Topo da aplicação
+st.title("🗳️ Urna Eletrônica")
+
+ufs = sorted(df_candidatos[col_uf].dropna().unique().tolist()) if col_uf else ['MT', 'SP', 'RJ']
+st.session_state.uf_sel = st.selectbox("Selecione o Estado (UF):", ufs, index=ufs.index(st.session_state.uf_sel) if st.session_state.uf_sel in ufs else 0)
 
 # TELA DE FIM
 if st.session_state.etapa >= len(ETAPAS):
@@ -174,7 +108,7 @@ if st.session_state.etapa >= len(ETAPAS):
 
 etapa = ETAPAS[st.session_state.etapa]
 
-# Filtragem
+# Filtragem de candidatos
 df_uf = df_candidatos[df_candidatos[col_uf].isin([st.session_state.uf_sel, 'BR'])] if col_uf else df_candidatos
 df_cargo = df_uf[df_uf[col_cargo].isin(etapa["filtro"])] if col_cargo else df_uf
 
@@ -208,68 +142,67 @@ if len(dig) == etapa["digitos"] or (len(dig) == 2 and e_legenda):
 st.markdown(f"""
 <div class='visor-box'>
     <p style='font-size: 11px; margin-bottom: 2px; color: #444;'>SEU VOTO VAI PARA</p>
-    <h3 style='font-size: 16px; margin-top: 0; color: #000;'>{etapa['cargo']}</h3>
+    <h3 style='font-size: 18px; margin-top: 0; color: #000;'>{etapa['cargo']}</h3>
     <div style='margin-top: 6px; margin-bottom: 6px;'>
-        <span style='font-size: 12px; margin-right: 4px;'>Número:</span>{boxes_html}
+        <span style='font-size: 13px; margin-right: 4px;'>Número:</span>{boxes_html}
     </div>
     {cand_info}
 </div>
 """, unsafe_allow_html=True)
 
-# FUNÇÃO DE CLIQUE DOS NÚMEROS
+# LÓGICA DE TECLADO
 def press(n):
     if len(st.session_state.digitos) < etapa["digitos"]:
         st.session_state.digitos += str(n)
 
-# TECLADO NUMÉRICO (3 COLUNAS)
+# TECLADO NUMÉRICO (Grelha nativa e estável do Streamlit)
 c1, c2, c3 = st.columns(3)
 with c1:
-    if st.button("1", key="b1", use_container_width=True): press(1); st.rerun()
+    if st.button("1", use_container_width=True): press(1); st.rerun()
 with c2:
-    if st.button("2", key="b2", use_container_width=True): press(2); st.rerun()
+    if st.button("2", use_container_width=True): press(2); st.rerun()
 with c3:
-    if st.button("3", key="b3", use_container_width=True): press(3); st.rerun()
+    if st.button("3", use_container_width=True): press(3); st.rerun()
 
 c4, c5, c6 = st.columns(3)
 with c4:
-    if st.button("4", key="b4", use_container_width=True): press(4); st.rerun()
+    if st.button("4", use_container_width=True): press(4); st.rerun()
 with c5:
-    if st.button("5", key="b5", use_container_width=True): press(5); st.rerun()
+    if st.button("5", use_container_width=True): press(5); st.rerun()
 with c6:
-    if st.button("6", key="b6", use_container_width=True): press(6); st.rerun()
+    if st.button("6", use_container_width=True): press(6); st.rerun()
 
 c7, c8, c9 = st.columns(3)
 with c7:
-    if st.button("7", key="b7", use_container_width=True): press(7); st.rerun()
+    if st.button("7", use_container_width=True): press(7); st.rerun()
 with c8:
-    if st.button("8", key="b8", use_container_width=True): press(8); st.rerun()
+    if st.button("8", use_container_width=True): press(8); st.rerun()
 with c9:
-    if st.button("9", key="b9", use_container_width=True): press(9); st.rerun()
+    if st.button("9", use_container_width=True): press(9); st.rerun()
 
-# Linha do 0
 _, c0, _ = st.columns(3)
 with c0:
-    if st.button("0", key="b0", use_container_width=True): press(0); st.rerun()
+    if st.button("0", use_container_width=True): press(0); st.rerun()
 
-st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True)
+st.divider()
 
 # BOTÕES DE AÇÃO
 act1, act2, act3 = st.columns(3)
 
 with act1:
-    if st.button("BRANCO", key="btn_branco", use_container_width=True):
+    if st.button("⚪ BRANCO", use_container_width=True):
         st.session_state.votos[etapa["cargo"]] = "BRANCO"
         st.session_state.etapa += 1
         st.session_state.digitos = ""
         st.rerun()
 
 with act2:
-    if st.button("CORRIGE", key="btn_corrige", use_container_width=True):
+    if st.button("🟠 CORRIGE", use_container_width=True):
         st.session_state.digitos = ""
         st.rerun()
 
 with act3:
-    if st.button("CONFIRMA", key="btn_confirma", use_container_width=True):
+    if st.button("🟢 CONFIRMA", type="primary", use_container_width=True):
         st.session_state.votos[etapa["cargo"]] = st.session_state.digitos if st.session_state.digitos else "NULO"
         st.session_state.etapa += 1
         st.session_state.digitos = ""
