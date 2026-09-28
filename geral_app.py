@@ -54,7 +54,7 @@ if "votos" not in st.session_state:
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "MT"
 
-# --- CSS MÍNIMO E SEGURO (Apenas para o visor e quadrados dos números) ---
+# --- CSS MÍNIMO E SEGURO ---
 st.markdown("""
 <style>
     .visor-box {
@@ -115,6 +115,13 @@ df_cargo = df_uf[df_uf[col_cargo].isin(etapa["filtro"])] if col_cargo else df_uf
 dig = st.session_state.digitos
 cand = None
 e_legenda = False
+repetido_senador = False
+
+# VERIFICAÇÃO SE É O MESMO SENADOR DA 1ª VAGA
+if etapa["cargo"] == "SENADOR (2ª VAGA)" and dig != "":
+    voto_sen1 = st.session_state.votos.get("SENADOR (1ª VAGA)", "")
+    if dig == voto_sen1 and dig not in ["BRANCO", "NULO"]:
+        repetido_senador = True
 
 if len(dig) == etapa["digitos"]:
     m = df_cargo[df_cargo[col_num] == dig] if col_num else pd.DataFrame()
@@ -130,7 +137,9 @@ elif len(dig) == 2 and etapa["legenda"]:
 boxes_html = "".join([f"<div class='digit-square'>{dig[i] if i < len(dig) else ''}</div>" for i in range(etapa["digitos"])])
 
 cand_info = ""
-if len(dig) == etapa["digitos"] or (len(dig) == 2 and e_legenda):
+if repetido_senador:
+    cand_info = "<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px; color: red;'><b>CANDIDATO JÁ VOTADO NA 1ª VAGA<br>VOTO SERÁ NULO</b></div>"
+elif len(dig) == etapa["digitos"] or (len(dig) == 2 and e_legenda):
     if cand is not None:
         if e_legenda:
             cand_info = f"<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px;'><b>VOTO NA LEGENDA</b><br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
@@ -155,7 +164,7 @@ def press(n):
     if len(st.session_state.digitos) < etapa["digitos"]:
         st.session_state.digitos += str(n)
 
-# TECLADO NUMÉRICO (Grelha nativa e estável do Streamlit)
+# TECLADO NUMÉRICO
 c1, c2, c3 = st.columns(3)
 with c1:
     if st.button("1", use_container_width=True): press(1); st.rerun()
@@ -203,7 +212,13 @@ with act2:
 
 with act3:
     if st.button("🟢 CONFIRMA", type="primary", use_container_width=True):
-        st.session_state.votos[etapa["cargo"]] = st.session_state.digitos if st.session_state.digitos else "NULO"
+        voto_final = st.session_state.digitos if st.session_state.digitos else "NULO"
+        
+        # Se for repetido no 2º Senador, invalida o voto marcando como NULO
+        if repetido_senador:
+            voto_final = "NULO"
+            
+        st.session_state.votos[etapa["cargo"]] = voto_final
         st.session_state.etapa += 1
         st.session_state.digitos = ""
         st.rerun()
