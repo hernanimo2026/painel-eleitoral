@@ -1,224 +1,191 @@
 import streamlit as st
 import pandas as pd
 import os
+import plotly.express as px
+import unicodedata
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
-st.set_page_config(page_title="Urna Eletrônica 2026", layout="centered")
+# Configuração do título da página
+st.set_page_config(page_title="Visualizador de Dados", layout="wide")
+st.title("📊 Painel Eleitoral Consolidado (PL vs PT)")
 
-# --- LEITURA DA BASE DE DADOS ---
-@st.cache_data
-def carregar_dados():
-    csvs = [f for f in os.listdir('.') if f.endswith('.csv')]
-    if not csvs:
-        return pd.DataFrame()
-    for enc in ['latin1', 'iso-8859-1', 'cp1252', 'utf-8']:
-        try:
-            df = pd.read_csv(csvs[0], sep=';', encoding=enc, dtype=str, on_bad_lines='skip')
-            if len(df.columns) > 1:
-                df.columns = df.columns.str.strip().str.upper()
-                for c in df.columns:
-                    df[c] = df[c].astype(str).str.strip().str.upper()
-                return df
-        except Exception:
-            continue
-    return pd.DataFrame()
+# Nome do seu arquivo Excel
+ARQUIVO_DADOS = "votaçao_partido_presidente_2026.xlsx"
 
-df_candidatos = carregar_dados()
+# Função para remover acentos do texto e facilitar a busca livre do usuário
+def remover_acentos(texto):
+    if not isinstance(texto, str):
+        return ""
+    return "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
 
-if df_candidatos.empty:
-    st.error("⚠️ Nenhuma base de dados (.csv) encontrada no repositório.")
-    st.stop()
+# Função para construir o arquivo PDF estruturado
+def gerar_pdf(dataframe, nome_col_municipio, nome_col_sigla):
+    pdf_filename = "relatorio_eleitoral_filtrado.pdf"
+    doc = SimpleDocTemplate(pdf_filename, pagesize=letter, title="Relatório Eleitoral")
+    story = []
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor("#2C3E50"), spaceAfter=12)
+    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=10, leading=14, spaceAfter=8)
+    
+    story.append(Paragraph("<b>📋 Relatório Consolidado de Desempenho Eleitoral (PL vs PT)</b>", title_style))
+    story.append(Paragraph("Este documento apresenta a análise computada a partir das cidades selecionadas no painel digital.", normal_style))
+    story.append(Spacer(1, 10))
+    
+    table_data = [["Cidade", "UF", "Votos PL", "Votos PT", "Diferença Absoluta"]]
+    for _, row in dataframe.iterrows():
+        sinal = "+" if row["DIFERENCA_PL_PT"] >= 0 else ""
+        table_data.append([
+            str(row[nome_col_municipio]),
+            str(row[nome_col_sigla]),
+            f"{int(row['PL']):,}",
+            f"{int(row['PT']):,}",
+            f"{sinal}{int(row['DIFERENCA_PL_PT']):,}"
+        ])
+    
+    t = Table(table_data, colWidths=[140, 50, 100, 100, 120])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#FAF9F6")),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDC3C7")),
+    ]))
+    story.append(t)
+    doc.build(story)
+    return pdf_filename
 
-# Identificação das Colunas
-col_num = next((c for c in ['NR_CANDIDATO', 'NR_CAND', 'NUMERO'] if c in df_candidatos.columns), None)
-col_nome = next((c for c in ['NM_URNA_CANDIDATO', 'NM_CANDIDATO'] if c in df_candidatos.columns), None)
-col_partido = next((c for c in ['SG_PARTIDO', 'PARTIDO'] if c in df_candidatos.columns), None)
-col_uf = next((c for c in ['SG_UF', 'UF'] if c in df_candidatos.columns), None)
-col_cargo = next((c for c in ['DS_CARGO', 'CARGO'] if c in df_candidatos.columns), None)
-
-# ETAPAS DA VOTAÇÃO
-ETAPAS = [
-    {"cargo": "DEPUTADO FEDERAL", "digitos": 4, "legenda": True, "filtro": ["DEPUTADO FEDERAL"]},
-    {"cargo": "DEPUTADO ESTADUAL", "digitos": 5, "legenda": True, "filtro": ["DEPUTADO ESTADUAL", "DEPUTADO DISTRITAL"]},
-    {"cargo": "SENADOR (1ª VAGA)", "digitos": 3, "legenda": False, "filtro": ["SENADOR"]},
-    {"cargo": "SENADOR (2ª VAGA)", "digitos": 3, "legenda": False, "filtro": ["SENADOR"]},
-    {"cargo": "GOVERNADOR", "digitos": 2, "legenda": False, "filtro": ["GOVERNADOR"]},
-    {"cargo": "PRESIDENTE", "digitos": 2, "legenda": False, "filtro": ["PRESIDENTE"]}
-]
-
-if "etapa" not in st.session_state:
-    st.session_state.etapa = 0
-if "digitos" not in st.session_state:
-    st.session_state.digitos = ""
-if "votos" not in st.session_state:
-    st.session_state.votos = {}
-if "uf_sel" not in st.session_state:
-    st.session_state.uf_sel = "MT"
-
-# --- CSS MÍNIMO E SEGURO ---
-st.markdown("""
-<style>
-    .visor-box {
-        background-color: #dbe4db;
-        border: 2px solid #222;
-        border-radius: 6px;
-        padding: 12px;
-        min-height: 140px;
-        color: #000;
-        font-family: Arial, sans-serif;
-        box-shadow: inset 0 0 6px rgba(0,0,0,0.15);
-        margin-bottom: 15px;
-    }
-    .digit-square {
-        display: inline-block;
-        width: 26px;
-        height: 32px;
-        border: 2px solid #000;
-        background-color: #fff;
-        color: #000;
-        font-size: 18px;
-        font-weight: bold;
-        text-align: center;
-        line-height: 28px;
-        margin-right: 4px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Topo da aplicação
-st.title("🗳️ Urna Eletrônica")
-
-ufs = sorted(df_candidatos[col_uf].dropna().unique().tolist()) if col_uf else ['MT', 'SP', 'RJ']
-st.session_state.uf_sel = st.selectbox("Selecione o Estado (UF):", ufs, index=ufs.index(st.session_state.uf_sel) if st.session_state.uf_sel in ufs else 0)
-
-# TELA DE FIM
-if st.session_state.etapa >= len(ETAPAS):
-    st.balloons()
-    st.markdown("""
-    <div class='visor-box' style='text-align: center; padding-top: 30px;'>
-        <h1 style='font-size: 50px; margin: 0; color: #000;'>FIM</h1>
-        <p style='font-size: 14px; color: #333;'>VOTAÇÃO CONCLUÍDA</p>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🔄 Reiniciar Votação", use_container_width=True):
-        st.session_state.etapa = 0
-        st.session_state.digitos = ""
-        st.session_state.votos = {}
-        st.rerun()
-    st.stop()
-
-etapa = ETAPAS[st.session_state.etapa]
-
-# Filtragem de candidatos
-df_uf = df_candidatos[df_candidatos[col_uf].isin([st.session_state.uf_sel, 'BR'])] if col_uf else df_candidatos
-df_cargo = df_uf[df_uf[col_cargo].isin(etapa["filtro"])] if col_cargo else df_uf
-
-dig = st.session_state.digitos
-cand = None
-e_legenda = False
-repetido_senador = False
-
-# VERIFICAÇÃO SE É O MESMO SENADOR DA 1ª VAGA
-if etapa["cargo"] == "SENADOR (2ª VAGA)" and dig != "":
-    voto_sen1 = st.session_state.votos.get("SENADOR (1ª VAGA)", "")
-    if dig == voto_sen1 and dig not in ["BRANCO", "NULO"]:
-        repetido_senador = True
-
-if len(dig) == etapa["digitos"]:
-    m = df_cargo[df_cargo[col_num] == dig] if col_num else pd.DataFrame()
-    if not m.empty:
-        cand = m.iloc[0]
-elif len(dig) == 2 and etapa["legenda"]:
-    m_leg = df_cargo[df_cargo[col_num].str.startswith(dig)] if col_num else pd.DataFrame()
-    if not m_leg.empty:
-        cand = m_leg.iloc[0]
-        e_legenda = True
-
-# VISOR
-boxes_html = "".join([f"<div class='digit-square'>{dig[i] if i < len(dig) else ''}</div>" for i in range(etapa["digitos"])])
-
-cand_info = ""
-if repetido_senador:
-    cand_info = "<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px; color: red;'><b>CANDIDATO JÁ VOTADO NA 1ª VAGA<br>VOTO SERÁ NULO</b></div>"
-elif len(dig) == etapa["digitos"] or (len(dig) == 2 and e_legenda):
-    if cand is not None:
-        if e_legenda:
-            cand_info = f"<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px;'><b>VOTO NA LEGENDA</b><br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
-        else:
-            cand_info = f"<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px;'><b>Nome:</b> {cand.get(col_nome, 'N/A')}<br><b>Partido:</b> {cand.get(col_partido, 'N/A')}</div>"
+if os.path.exists(ARQUIVO_DADOS):
+    # Carrega a planilha Excel
+    df = pd.read_excel(ARQUIVO_DADOS)
+    
+    # Limpa espaços em branco ocultos nos nomes das colunas originais
+    df.columns = [str(col).strip() for col in df.columns]
+    
+    # Descobre os nomes exatos das colunas por posição física
+    NOME_COL_MUNICIPIO = df.columns[0]  # Primeira coluna (Coluna A)
+    NOME_COL_SIGLA = df.columns[1]      # Segunda coluna (Coluna B)
+    
+    # Filtro Inteligente: Remove as linhas onde o município é idêntico ao estado, totais gerais ou nulos
+    df_limpo = df[
+        (df[NOME_COL_MUNICIPIO].astype(str).str.strip() != df[NOME_COL_SIGLA].astype(str).str.strip()) &
+        (df[NOME_COL_MUNICIPIO].astype(str).str.upper().str.strip() != "TOTAL GERAL") &
+        (df[NOME_COL_MUNICIPIO].astype(str).str.upper().str.strip() != "ZZ") &
+        (df[NOME_COL_MUNICIPIO].notna())
+    ].copy()
+    
+    # Realiza os cálculos de margem (PL - PT)
+    df_limpo["DIFERENCA_PL_PT"] = df_limpo["PL"] - df_limpo["PT"]
+    
+    # GARANTIA DA SIGLA: Monta estritamente o Nome da Cidade e a UF entre parênteses
+    df_limpo["Cidade_UF"] = df_limpo[NOME_COL_MUNICIPIO].astype(str).str.strip() + " (" + df_limpo[NOME_COL_SIGLA].astype(str).str.strip() + ")"
+    
+    st.sidebar.header("🔧 Configurações da Análise")
+    
+    # Filtro dinâmico de Partidos para o Gráfico 1
+    colunas_excluir = [NOME_COL_MUNICIPIO, NOME_COL_SIGLA, "Total Geral", "TOTAL GERAL", "CHAVE_UF", "GEOCODIGO", "chave_uf", "geocodigo", "CIDADE_UF", "Cidade_UF", "DIFERENCA_PL_PT"]
+    colunas_partidos = [col for col in df_limpo.columns if col not in colunas_excluir]
+    
+    partidos_selecionados = st.sidebar.multiselect(
+        "Escolha os Partidos para comparar:",
+        options=colunas_partidos,
+        default=[p for p in ["PT", "PL"] if p in colunas_partidos] if len([p for p in ["PT", "PL"] if p in colunas_partidos]) == 2 else colunas_partidos[:2]
+    )
+    
+    # === NOVO FILTRO DE ESTADOS ADICIONADO AQUI ===
+    lista_estados_disponiveis = sorted(df_limpo[NOME_COL_SIGLA].unique().astype(str))
+    estados_selecionados = st.sidebar.multiselect(
+        "Filtre os Estados (UF) desejados:",
+        options=lista_estados_disponiveis,
+        default=[]  # Deixe vazio para listar todas as cidades inicialmente
+    )
+    
+    # Filtrando dinamicamente a base de dados que alimenta a caixa de seleção de cidades
+    if estados_selecionados:
+        df_filtrado_por_estado = df_limpo[df_limpo[NOME_COL_SIGLA].isin(estados_selecionados)]
     else:
-        cand_info = "<div style='margin-top: 8px; border-top: 1px solid #777; padding-top: 4px; color: red;'><b>VOTO NULO</b></div>"
-
-st.markdown(f"""
-<div class='visor-box'>
-    <p style='font-size: 11px; margin-bottom: 2px; color: #444;'>SEU VOTO VAI PARA</p>
-    <h3 style='font-size: 18px; margin-top: 0; color: #000;'>{etapa['cargo']}</h3>
-    <div style='margin-top: 6px; margin-bottom: 6px;'>
-        <span style='font-size: 13px; margin-right: 4px;'>Número:</span>{boxes_html}
-    </div>
-    {cand_info}
-</div>
-""", unsafe_allow_html=True)
-
-# LÓGICA DE TECLADO
-def press(n):
-    if len(st.session_state.digitos) < etapa["digitos"]:
-        st.session_state.digitos += str(n)
-
-# TECLADO NUMÉRICO
-c1, c2, c3 = st.columns(3)
-with c1:
-    if st.button("1", use_container_width=True): press(1); st.rerun()
-with c2:
-    if st.button("2", use_container_width=True): press(2); st.rerun()
-with c3:
-    if st.button("3", use_container_width=True): press(3); st.rerun()
-
-c4, c5, c6 = st.columns(3)
-with c4:
-    if st.button("4", use_container_width=True): press(4); st.rerun()
-with c5:
-    if st.button("5", use_container_width=True): press(5); st.rerun()
-with c6:
-    if st.button("6", use_container_width=True): press(6); st.rerun()
-
-c7, c8, c9 = st.columns(3)
-with c7:
-    if st.button("7", use_container_width=True): press(7); st.rerun()
-with c8:
-    if st.button("8", use_container_width=True): press(8); st.rerun()
-with c9:
-    if st.button("9", use_container_width=True): press(9); st.rerun()
-
-_, c0, _ = st.columns(3)
-with c0:
-    if st.button("0", use_container_width=True): press(0); st.rerun()
-
-st.divider()
-
-# BOTÕES DE AÇÃO
-act1, act2, act3 = st.columns(3)
-
-with act1:
-    if st.button("⚪ BRANCO", use_container_width=True):
-        st.session_state.votos[etapa["cargo"]] = "BRANCO"
-        st.session_state.etapa += 1
-        st.session_state.digitos = ""
-        st.rerun()
-
-with act2:
-    if st.button("🟠 CORRIGE", use_container_width=True):
-        st.session_state.digitos = ""
-        st.rerun()
-
-with act3:
-    if st.button("🟢 CONFIRMA", type="primary", use_container_width=True):
-        voto_final = st.session_state.digitos if st.session_state.digitos else "NULO"
-        
-        # Se for repetido no 2º Senador, invalida o voto marcando como NULO
-        if repetido_senador:
-            voto_final = "NULO"
+        df_filtrado_por_estado = df_limpo
+    
+    # Ordena a lista de busca em ordem alfabética (A-Z) considerando o filtro de estados acima
+    lista_busca_completa = sorted(df_filtrado_por_estado["Cidade_UF"].unique(), key=lambda s: remover_acentos(s).lower())
+    
+    # Pré-seleciona Ariquemes e Cacoal com o formato correto se estiverem disponíveis na lista filtrada
+    opcoes_padrao = [c for c in lista_busca_completa if "ARIQUEMES (RO)" in c or "CACOAL (RO)" in c]
+    
+    cidades_uf_selecionadas = st.sidebar.multiselect(
+        "Busque e adicione cidades para analisar (Ordem A-Z):",
+        options=lista_busca_completa,
+        default=opcoes_padrao if opcoes_padrao else lista_busca_completa[:2]
+    )
+    
+    # Filtragem e ordenação final das cidades selecionadas pelo usuário
+    df_final = df_limpo[df_limpo["Cidade_UF"].isin(cidades_uf_selecionadas)]
+    df_final = df_final.sort_values(by=NOME_COL_MUNICIPIO, key=lambda col: col.apply(remover_acentos))
+    
+    # Geração do botão para baixar o relatório em PDF na barra lateral
+    if not df_final.empty:
+        st.sidebar.subheader("📄 Exportação")
+        try:
+            nome_pdf = gerar_pdf(df_final, NOME_COL_MUNICIPIO, NOME_COL_SIGLA)
+            with open(nome_pdf, "rb") as pdf_file:
+                st.sidebar.download_button(
+                    label="📥 Baixar Relatório em PDF",
+                    data=pdf_file,
+                    file_name="relatorio_eleitoral_pl_pt.pdf",
+                    mime="application/pdf"
+                )
+        except Exception as e:
+            st.sidebar.error("Erro ao gerar o PDF.")
             
-        st.session_state.votos[etapa["cargo"]] = voto_final
-        st.session_state.etapa += 1
-        st.session_state.digitos = ""
-        st.rerun()
+    # Exibição dos Gráficos na tela principal
+    if not df_final.empty:
+        st.subheader("📊 Gráfico 1: Votação Absoluta por Partido")
+        df_melted = df_final.melt(id_vars=["Cidade_UF"], value_vars=partidos_selecionados, var_name="Partido", value_name="Votos")
+        cores_mapa = {"PL": "#1E90FF", "PT": "#FF1A1A", "PSD": "#00CC96", "NOVO": "#FF7F0E"}
+        
+        fig1 = px.bar(
+            df_melted,
+            x="Cidade_UF",
+            y="Votos",
+            color="Partido",
+            barmode="group",
+            color_discrete_map=cores_mapa,
+            category_orders={"Cidade_UF": [c for c in lista_busca_completa if c in cidades_uf_selecionadas]},
+            labels={"Cidade_UF": "Cidade (UF)", "Votos": "Quantidade de Votos"}
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        st.subheader("⚖️ Gráfico 2: Margem de Diferença de Votos com Cor do Ganhador")
+        st.caption("Barras VERMELHAS para baixo = PT na frente | Barras AZUIS para cima = PL na frente")
+        
+        df_final = df_final.copy()
+        df_final["Cor_Partido"] = df_final["DIFERENCA_PL_PT"].apply(lambda x: "Vantagem PL" if x >= 0 else "Vantagem PT")
+        
+        fig2 = px.bar(
+            df_final,
+            x="Cidade_UF",
+            y="DIFERENCA_PL_PT",
+            color="Cor_Partido",
+            color_discrete_map={"Vantagem PL": "#1E90FF", "Vantagem PT": "#FF1A1A"},
+            category_orders={"Cidade_UF": [c for c in lista_busca_completa if c in cidades_uf_selecionadas]},
+            labels={"Cidade_UF": "Cidade (UF)", "DIFERENCA_PL_PT": "Diferença Absoluta (PL - PT)"}
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+        
+        st.subheader("📝 Demonstrativo Detalhado de Diferenças")
+        df_tabela_resumo = df_final[[NOME_COL_MUNICIPIO, NOME_COL_SIGLA, "PL", "PT", "DIFERENCA_PL_PT"]].copy()
+        df_tabela_resumo.columns = ["Cidade", "UF", "Votos PL", "Votos PT", "Diferença Absoluta (PL - PT)"]
+        st.dataframe(df_tabela_resumo.set_index("Cidade"), use_container_width=True)
+        
+    else:
+        st.warning("Selecione cidades na barra lateral para carregar os gráficos.")
+        
+    st.subheader("📋 Tabela Completa de Dados (Planilha Original)")
+    st.dataframe(df, use_container_width=True)
+    
+else:
+    st.error(f"❌ O arquivo '{ARQUIVO_DADOS}' não foi encontrado.")
